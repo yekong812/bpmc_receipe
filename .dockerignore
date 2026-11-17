@@ -1,0 +1,6 @@
+.venv
+storage
+frontend
+.git
+.pytest_cache
+**/__pycache__

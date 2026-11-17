@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        INSTALL_OCR: ${INSTALL_OCR:-false}
+    volumes:
+      - ./storage:/app/storage
+    environment:
+      STORAGE_DIR: /app/storage
+      RECEIPT_LLM_ENABLED: ${RECEIPT_LLM_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
+      RECEIPT_LLM_MODE: ${RECEIPT_LLM_MODE:-auto}
+      RECEIPT_LLM_ALLOW_IMAGES: ${RECEIPT_LLM_ALLOW_IMAGES:-false}
+      OPENAI_INPUT_USD_PER_MILLION: ${OPENAI_INPUT_USD_PER_MILLION:-}
+      OPENAI_OUTPUT_USD_PER_MILLION: ${OPENAI_OUTPUT_USD_PER_MILLION:-}
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_BASE_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
