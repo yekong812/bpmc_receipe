@@ -236,6 +236,17 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   );
   await confirmBook(page);
   await expect(page.locator(".stats")).toContainText("5,000");
+  const receiptNumber = page.getByRole("link", { name: "#1", exact: true });
+  await receiptNumber.click();
+  const review = page.getByRole("dialog", { name: "영수증 검토" });
+  await expect(
+    review.getByRole("img", { name: "receipt.png 영수증 원본" }),
+  ).toBeVisible();
+  await expect(
+    review.getByRole("button", { name: "재검토", exact: true }),
+  ).toBeDisabled();
+  await review.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(receiptNumber).toBeFocused();
   const [ppt] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "↧ PPTX", exact: true }).click(),

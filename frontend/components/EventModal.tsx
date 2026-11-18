@@ -39,6 +39,7 @@ export default function EventModal({
     [finalizing, setFinalizing] = useState(false),
     [focusedExpense, setFocusedExpense] = useState<number | null>(null),
     [childDirty, setChildDirty] = useState(false),
+    [reviewReceiptId, setReviewReceiptId] = useState<number | null>(null),
     [includeUnknown, setIncludeUnknown] = useState(false);
   const locked = event.status === "최종 확정";
   const expenseDirty = JSON.stringify(draft) !== JSON.stringify(event.expenses);
@@ -416,12 +417,29 @@ export default function EventModal({
                               />
                             </td>
                             <td className="small">
-                              {links
-                                .map(
-                                  (l) =>
-                                    `#${event.receipts.find((r) => r.id === l.receipt_id)?.receipt_number || event.receipts.findIndex((r) => r.id === l.receipt_id) + 1}`,
-                                )
-                                .join(", ") || (
+                              {links.map((l) => {
+                                const index = event.receipts.findIndex(
+                                  (r) => r.id === l.receipt_id,
+                                );
+                                const receipt = event.receipts[index];
+                                if (!receipt) return null;
+                                return (
+                                  <a
+                                    key={receipt.id}
+                                    className="text-button"
+                                    href={`/api/receipts/${receipt.id}/image`}
+                                    aria-haspopup="dialog"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setReviewReceiptId(receipt.id);
+                                    }}
+                                  >
+                                    #{receipt.receipt_number || index + 1}
+                                  </a>
+                                );
+                              })}
+                              {!links.length && (
                                 <span className="muted">미연결</span>
                               )}
                             </td>
@@ -599,14 +617,28 @@ export default function EventModal({
             />
           </fieldset>
         )}
-        {tab === "receipts" && (
+        {(tab === "receipts" || reviewReceiptId !== null) && (
           <ReceiptManager
+            key={reviewReceiptId ?? "list"}
             onDirtyChange={setChildDirty}
             event={event}
             refresh={refresh}
             action={action}
             busy={busy || locked}
             inform={inform}
+            reviewTarget={
+              reviewReceiptId === null
+                ? undefined
+                : {
+                    id: reviewReceiptId,
+                    onClose: () => setReviewReceiptId(null),
+                  }
+            }
+            readOnlyReason={
+              reviewReceiptId !== null && expenseDirty
+                ? "영수증을 수정하려면 지출 변경사항을 먼저 저장하세요."
+                : undefined
+            }
           />
         )}
         {tab === "history" && <VersionHistory event={event} action={action} />}

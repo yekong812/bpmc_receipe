@@ -7,13 +7,13 @@ export default function EntryGrid({
   rows,
   setRows,
   locked,
-  onReceipts,
+  onReceipt,
 }: {
   book: Book;
   rows: Entry[];
   setRows: (rows: Entry[]) => void;
   locked: boolean;
-  onReceipts: () => void;
+  onReceipt: (id: number) => void;
 }) {
   const [month, setMonth] = useState(""),
     [section, setSection] = useState(""),
@@ -388,21 +388,25 @@ export default function EntryGrid({
                     </td>
                     <td>
                       {links(r).map((l) => {
-                        const receipt = book.owner.receipts.find(
+                        const index = book.owner.receipts.findIndex(
                           (x) => x.id === l.receipt_id,
                         );
+                        const receipt = book.owner.receipts[index];
+                        if (!receipt) return null;
                         return (
-                          <button
+                          <a
                             key={l.receipt_id}
                             className="text-button"
-                            onClick={onReceipts}
+                            href={`/api/receipts/${receipt.id}/image`}
+                            aria-haspopup="dialog"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onReceipt(receipt.id);
+                            }}
                           >
-                            #
-                            {receipt?.receipt_number ||
-                              book.owner.receipts.findIndex(
-                                (x) => x.id === l.receipt_id,
-                              ) + 1}
-                          </button>
+                            #{receipt.receipt_number || index + 1}
+                          </a>
                         );
                       })}
                       {!links(r).length && (

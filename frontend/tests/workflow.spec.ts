@@ -205,6 +205,24 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     expect(zip.suggestedFilename()).toBe(`DRAFT_${event.name}_영수증.zip`);
     await detail.getByRole("tab", { name: /지출내역/ }).click();
     await expect(detail.locator(".expense-table")).toContainText("5,000");
+    const receiptNumber = detail.getByRole("link", { name: "#1", exact: true });
+    await receiptNumber.click();
+    await expect(reviewReason).toHaveValue("재검토 후 원본과 일치 확인");
+    await expect(
+      review.getByRole("button", { name: "재검토", exact: true }),
+    ).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(review).toBeHidden();
+    await expect(receiptNumber).toBeFocused();
+
+    const expenseItem = detail.getByLabel("1행 품목", { exact: true });
+    await expenseItem.fill("저장하지 않은 품목");
+    await receiptNumber.click();
+    await expect(
+      review.getByRole("button", { name: "재검토", exact: true }),
+    ).toBeDisabled();
+    await review.getByRole("button", { name: "닫기", exact: true }).click();
+    await expect(expenseItem).toHaveValue("저장하지 않은 품목");
   } finally {
     await request.delete(`/api/events/${event.id}`).catch(() => {});
   }

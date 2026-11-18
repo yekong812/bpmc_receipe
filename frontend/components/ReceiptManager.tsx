@@ -13,6 +13,8 @@ export default function ReceiptManager({
   hideCategories = false,
   hideExports = false,
   categoryNames,
+  reviewTarget,
+  readOnlyReason,
 }: {
   event: EventData;
   refresh: () => Promise<void>;
@@ -23,9 +25,15 @@ export default function ReceiptManager({
   hideCategories?: boolean;
   hideExports?: boolean;
   categoryNames?: Record<number, string>;
+  reviewTarget?: { id: number; onClose: () => void };
+  readOnlyReason?: string;
 }) {
-  const [selected, setSelected] = useState<number | null>(null),
-    [editing, setEditing] = useState<Receipt | null>(null),
+  const [selected, setSelected] = useState<number | null>(
+      reviewTarget?.id ?? null,
+    ),
+    [editing, setEditing] = useState<Receipt | null>(
+      () => event.receipts.find((r) => r.id === reviewTarget?.id) ?? null,
+    ),
     [suggestions, setSuggestions] = useState<
       {
         receipt_id: number;
@@ -45,7 +53,9 @@ export default function ReceiptManager({
       }[]
     >([]),
     [expense, setExpense] = useState(""),
-    [allocated, setAllocated] = useState(""),
+    [allocated, setAllocated] = useState(
+      String(editing?.final_amount_krw ?? ""),
+    ),
     [newCat, setNewCat] = useState(""),
     [job, setJob] = useState<{
       id: string;
@@ -135,6 +145,7 @@ export default function ReceiptManager({
       return;
     setEditing(null);
     setSelected(null);
+    reviewTarget?.onClose();
   }
   useEffect(() => {
     if (hideCategories && !newCat) {
@@ -143,7 +154,7 @@ export default function ReceiptManager({
     }
   }, [hideCategories, event.categories, newCat]);
   const links = event.links.filter((l) => l.receipt_id === selected);
-  return (
+  const manager = !reviewTarget && (
     <div>
       {llm && (
         <p className="muted small">
@@ -353,6 +364,11 @@ export default function ReceiptManager({
           </div>
         )}
       </div>
+    </div>
+  );
+  return (
+    <>
+      {manager}
       {editing && (
         <Dialog wide title="영수증 검토" onClose={closeReview}>
           <div className="detail-body receipt-editor">
@@ -377,8 +393,14 @@ export default function ReceiptManager({
                 </pre>
               </details>
             </div>
-            <fieldset className="grid-fieldset" disabled={busy || analyzing}>
+            <fieldset
+              className="grid-fieldset"
+              disabled={busy || analyzing || !!readOnlyReason}
+            >
               <h3>추출값 검토</h3>
+              {readOnlyReason && (
+                <p className="small muted">{readOnlyReason}</p>
+              )}
               <p className="muted small">
                 {confirmed
                   ? "확인된 검토값을 수정하려면 재검토를 누르세요."
@@ -580,6 +602,7 @@ export default function ReceiptManager({
                         await api(`/receipts/${editing.id}`, "DELETE");
                         setEditing(null);
                         setSelected(null);
+                        reviewTarget?.onClose();
                         await refresh();
                       });
                   }}
@@ -732,6 +755,6 @@ export default function ReceiptManager({
           </div>
         </Dialog>
       )}
-    </div>
+    </>
   );
 }

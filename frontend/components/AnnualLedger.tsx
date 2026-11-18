@@ -31,6 +31,7 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [childDirty, setChildDirty] = useState(false),
+    [reviewReceiptId, setReviewReceiptId] = useState<number | null>(null),
     [creating, setCreating] = useState(false),
     [finalizing, setFinalizing] = useState(false),
     [importTarget, setImportTarget] = useState<"entries" | "budget" | null>(
@@ -410,18 +411,31 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
                   rows={rows}
                   setRows={setRows}
                   locked={!!locked}
-                  onReceipts={() => guard(() => setTab("receipts"))}
+                  onReceipt={setReviewReceiptId}
                 />
               )}
-              {tab === "receipts" && (
+              {(tab === "receipts" || reviewReceiptId !== null) && (
                 <ReceiptManager
-                  key={book.id}
+                  key={`${book.id}:${reviewReceiptId ?? "list"}`}
                   event={book.owner}
                   refresh={refresh}
                   action={action}
                   busy={busy || !!locked}
                   inform={inform}
                   onDirtyChange={setChildDirty}
+                  reviewTarget={
+                    reviewReceiptId === null
+                      ? undefined
+                      : {
+                          id: reviewReceiptId,
+                          onClose: () => setReviewReceiptId(null),
+                        }
+                  }
+                  readOnlyReason={
+                    reviewReceiptId !== null && (rowDirty || budgetDirty)
+                      ? "영수증을 수정하려면 장부 변경사항을 먼저 저장하세요."
+                      : undefined
+                  }
                   hideCategories={kind === "b"}
                   hideExports={true}
                   categoryNames={Object.fromEntries(
