@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Dialog from "./Dialog";
-import { api, won } from "../lib/api";
+import { api, download, won } from "../lib/api";
 import { Book } from "../lib/annual";
 type Preview = {
   job_id: string;
@@ -65,6 +65,21 @@ export default function AnnualExcelImport({
       <p className="muted">
         {book.year}년 {book.name}에 초안으로 반영합니다. 다른 연도 거래와 오류
         행은 반영하지 않습니다.
+      </p>
+      <button
+        type="button"
+        onClick={() =>
+          download(
+            `/${book.kind}/books/${book.id}/excel/import/template?target=${target}`,
+            `${book.kind === "ordinary" ? "경상비" : "B"}_${book.year}_${target === "budget" ? "예산표" : "장부"}_샘플.xlsx`,
+          ).catch((e) => setError((e as Error).message))
+        }
+      >
+        ↧ 샘플 양식 다운로드
+      </button>
+      <p className="small muted">
+        샘플의 예시 행을 실제 자료로 바꾼 뒤 업로드하세요. 작성 안내 시트도
+        확인해주세요.
       </p>
       <label className="upload-zone">
         <strong>.xlsx 파일 선택</strong>

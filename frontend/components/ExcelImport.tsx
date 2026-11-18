@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { api, EventData, Preview, won } from "../lib/api";
+import { api, download, EventData, Preview, won } from "../lib/api";
 
 import Dialog from "./Dialog";
 export default function ExcelImport({
@@ -48,6 +48,21 @@ export default function ExcelImport({
       <p className="muted">
         .xlsx 파일을 검토한 후 지출내역에 반영합니다. 가져온 영수증 열은 연결
         데이터로 확정하지 않습니다.
+      </p>
+      <button
+        type="button"
+        onClick={() =>
+          download(
+            `/events/${event.id}/excel/import/template`,
+            "행사비_지출내역_샘플.xlsx",
+          ).catch((e) => setError((e as Error).message))
+        }
+      >
+        ↧ 샘플 양식 다운로드
+      </button>
+      <p className="small muted">
+        샘플의 예시 행을 실제 자료로 바꾼 뒤 업로드하세요. 작성 안내 시트도
+        확인해주세요.
       </p>
       <label className="upload-zone">
         ↥<strong>지출내역 Excel 파일 선택</strong>

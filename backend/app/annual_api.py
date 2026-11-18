@@ -500,6 +500,24 @@ def analyze_receipts(
     return analyze(b.owner_event_id, background, db)
 
 
+@router.get("/{kind}/books/{book_id}/excel/import/template")
+def annual_excel_template(
+    kind: Kind,
+    book_id: int,
+    target: Literal["entries", "budget"] = "entries",
+    db: Session = Depends(session),
+):
+    from .main import download
+    from .excel_templates import sample_workbook, MIME
+
+    b = get_book(db, kind, book_id)
+    if kind == "b" and target == "budget":
+        raise HTTPException(422, "B 장부에는 예산표가 없습니다.")
+    data = sample_workbook(kind, b.year, target, budgets=budget_rows(db, b))
+    label = "예산표" if target == "budget" else "장부"
+    return download(data, MIME, f"{LABEL[kind]}_{b.year}_{label}_샘플.xlsx")
+
+
 @router.post("/{kind}/books/{book_id}/excel/import/preview")
 async def preview_excel(
     kind: Kind,

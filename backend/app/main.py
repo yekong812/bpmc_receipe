@@ -511,6 +511,19 @@ async def read_upload(file, limit):
     return data
 
 
+@app.get("/api/events/{event_id}/excel/import/template")
+def event_excel_template(event_id: int, db: Session = Depends(session)):
+    from .excel_templates import sample_workbook, MIME
+
+    e = get(db, Event, event_id)
+    data = sample_workbook(
+        "event",
+        int(e.start_date[:4]),
+        categories=[c.name for c in rows(db, Category, event_id) if c.is_active],
+    )
+    return download(data, MIME, "행사비_지출내역_샘플.xlsx")
+
+
 @app.post("/api/events/{event_id}/excel/import/preview")
 async def excel_preview(
     event_id: int,
