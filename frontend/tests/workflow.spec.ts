@@ -134,25 +134,37 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       .filter({ hasText: "receipt.png" });
     await expect(receiptRow).toBeVisible();
     await receiptRow.click();
-    await detail
+    const review = page.getByRole("dialog", { name: "영수증 검토" });
+    await expect(
+      review.getByRole("img", { name: "receipt.png 영수증 원본" }),
+    ).toBeVisible();
+    await review
       .getByLabel("거래일시", { exact: true })
       .fill("2026-11-08T09:15");
-    await detail.getByLabel("상호명", { exact: true }).fill("BPMC");
-    await detail.getByLabel("최종 결제금액", { exact: true }).fill("5000");
-    await detail.getByLabel("사용 내역", { exact: true }).fill("테스트 간식");
-    await detail.getByLabel("검토 사유", { exact: true }).fill("");
-    await detail
+    await review.getByLabel("상호명", { exact: true }).fill("BPMC");
+    await review.getByLabel("최종 결제금액", { exact: true }).fill("5000");
+    await review.getByLabel("사용 내역", { exact: true }).fill("테스트 간식");
+    await review.getByLabel("검토 사유", { exact: true }).fill("");
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.keyboard.press("Escape");
+    await expect(review.getByLabel("상호명", { exact: true })).toHaveValue(
+      "BPMC",
+    );
+    await review
       .getByRole("button", { name: "검토값 저장", exact: true })
       .click();
     await expect(receiptRow).toContainText("확인됨");
-    await detail
+    await review
       .getByLabel("연결 지출 선택", { exact: true })
       .selectOption({ label: "#1 테스트 간식 (₩ 5,000)" });
-    await detail.getByLabel("배분금액", { exact: true }).fill("5000");
-    await detail
+    await review.getByLabel("배분금액", { exact: true }).fill("5000");
+    await review
       .getByRole("button", { name: "연결 확정", exact: true })
       .click();
-    await expect(detail.locator(".existing-link")).toContainText("5,000");
+    await expect(review.locator(".existing-link")).toContainText("5,000");
+    await review.getByRole("button", { name: "닫기", exact: true }).click();
+    await expect(review).toBeHidden();
+    await expect(receiptRow).toBeFocused();
     const [zip] = await Promise.all([
       page.waitForEvent("download"),
       detail.getByRole("button", { name: "↧ 정리된 ZIP 다운로드" }).click(),

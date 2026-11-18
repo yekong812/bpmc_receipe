@@ -219,6 +219,10 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
     .getByRole("button", { name: "이 영수증으로 지출 생성", exact: true })
     .click();
   await expect(page.locator(".existing-link")).toContainText("5,000");
+  await page
+    .getByRole("dialog", { name: "영수증 검토" })
+    .getByRole("button", { name: "닫기", exact: true })
+    .click();
   await page.getByRole("tab", { name: "B 장부", exact: true }).click();
   await expect(page.getByLabel("2거래 지출", { exact: true })).toHaveValue(
     "5000",

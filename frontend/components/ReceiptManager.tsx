@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, download, EventData, Receipt, won } from "../lib/api";
+import Dialog from "./Dialog";
 
 export default function ReceiptManager({
   event,
@@ -107,22 +108,32 @@ export default function ReceiptManager({
     return () => clearInterval(id);
   }, [job?.id, job?.status, refresh, inform]);
   useEffect(() => {
-    if (selected)
-      api<typeof extractions>(`/receipts/${selected}/extractions`)
-        .then(setExtractions)
-        .catch(() => setExtractions([]));
+    if (selected === null) return;
+    let active = true;
+    api<typeof extractions>(`/receipts/${selected}/extractions`)
+      .then((history) => {
+        if (active) setExtractions(history);
+      })
+      .catch(() => {
+        if (active) setExtractions([]);
+      });
+    return () => {
+      active = false;
+    };
   }, [selected, event.version]);
   const analyzing = job?.status === "running";
   function select(r: Receipt) {
-    if (
-      pending &&
-      !confirm("저장하지 않은 영수증 검토값을 버리고 다른 영수증을 열까요?")
-    )
-      return;
     setSelected(r.id);
     setEditing({ ...r });
+    setExtractions([]);
     setExpense("");
     setAllocated(String(r.final_amount_krw ?? ""));
+  }
+  function closeReview() {
+    if (pending && !confirm("저장하지 않은 영수증 검토값을 버리고 닫을까요?"))
+      return;
+    setEditing(null);
+    setSelected(null);
   }
   useEffect(() => {
     if (hideCategories && !newCat) {
@@ -281,13 +292,17 @@ export default function ReceiptManager({
             {event.receipts.map((r, i) => (
               <tr
                 tabIndex={0}
+                aria-haspopup="dialog"
                 key={r.id}
                 className={
                   selected === r.id ? "selected clickable" : "clickable"
                 }
                 onClick={() => select(r)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") select(r);
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    select(r);
+                  }
                 }}
               >
                 <td>{r.receipt_number || i + 1}</td>
@@ -338,363 +353,369 @@ export default function ReceiptManager({
         )}
       </div>
       {editing && (
-        <div className="receipt-editor">
-          <div className="image-preview">
-            <h3>
-              원본 미리보기 <small>{editing.original_name}</small>
-            </h3>
-            <a
-              href={`/api/receipts/${editing.id}/image`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <img
-                src={`/api/receipts/${editing.id}/image`}
-                alt={`${editing.original_name} 영수증 원본`}
-              />
-            </a>
-            <details>
-              <summary>OCR 추출 텍스트</summary>
-              <pre>{editing.ocr_text || "아직 추출된 텍스트가 없습니다."}</pre>
-            </details>
-          </div>
-          <fieldset className="grid-fieldset" disabled={busy || analyzing}>
-            <h3>추출값 검토</h3>
-            <p className="muted small">
-              원본을 확인해 수정한 뒤 저장하세요. 검토 사유를 비우고 날짜·금액을
-              입력하면 확인 완료됩니다.
-            </p>
-            {!!extractions.length && (
-              <details className="extraction-comparison">
-                <summary>
-                  분석 이력·현재 값 비교 ({extractions.length}회)
-                </summary>
-                {extractions.map((ex) => {
-                  const value = JSON.parse(ex.extracted_json);
-                  const usage = JSON.parse(ex.usage_json || "{}");
-                  return (
-                    <div key={ex.id}>
-                      <p className="small muted">
-                        {ex.analyzed_at} · {ex.model_name} · {ex.input_kind}
-                      </p>
-                      <p className="small muted">
-                        입력 토큰 {usage.input_tokens ?? "—"} / 출력 토큰{" "}
-                        {usage.output_tokens ?? "—"} · 추정 비용{" "}
-                        {ex.estimated_cost_usd
-                          ? `$${ex.estimated_cost_usd}`
-                          : "단가 미설정"}
-                      </p>
-                      {ex.error_message && (
-                        <p className="error-text">{ex.error_message}</p>
-                      )}
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>필드</th>
-                            <th>분석 후보</th>
-                            <th>현재 수정값</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(
-                            [
-                              "transaction_at",
-                              "merchant",
-                              "final_amount_krw",
-                              "description",
-                            ] as const
-                          ).map((key) => (
-                            <tr key={key}>
-                              <th>
-                                {
-                                  {
-                                    transaction_at: "거래일시",
-                                    merchant: "상호",
-                                    final_amount_krw: "결제금액",
-                                    description: "사용 내역",
-                                  }[key]
-                                }
-                              </th>
-                              <td>{String(value[key] ?? "미확인")}</td>
-                              <td>{String(editing[key] ?? "미확인")}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              "이 분석 후보를 검토폼에 가져올까요? 저장하기 전까지 DB는 변경되지 않습니다.",
-                            )
-                          )
-                            setEditing({ ...editing, ...value });
-                        }}
-                      >
-                        이 후보를 검토폼에 가져오기
-                      </button>
-                    </div>
-                  );
-                })}
-              </details>
-            )}
-            <label className="field">
-              거래일시
-              <input
-                type="datetime-local"
-                value={editing.transaction_at?.slice(0, 19) || ""}
-                onChange={(e) =>
-                  setEditing({
-                    ...editing,
-                    transaction_at: e.target.value || null,
-                  })
-                }
-              />
-            </label>
-            <label className="field small">
-              날짜만 확인된 경우
-              <input
-                aria-label="거래 날짜만 입력"
-                type="date"
-                value={editing.transaction_at?.slice(0, 10) || ""}
-                onChange={(e) =>
-                  setEditing({
-                    ...editing,
-                    transaction_at: e.target.value || null,
-                  })
-                }
-              />
-              <span className="muted">
-                시간을 모르면 날짜만 저장하세요. 확정 ZIP의 검토 폴더로
-                분리합니다.
-              </span>
-            </label>
-            <div className="form-row">
-              <label className="field">
-                상호명
-                <input
-                  value={editing.merchant}
-                  onChange={(e) =>
-                    setEditing({ ...editing, merchant: e.target.value })
-                  }
+        <Dialog wide title="영수증 검토" onClose={closeReview}>
+          <div className="detail-body receipt-editor">
+            <div className="image-preview">
+              <h3>
+                원본 미리보기 <small>{editing.original_name}</small>
+              </h3>
+              <a
+                href={`/api/receipts/${editing.id}/image`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img
+                  src={`/api/receipts/${editing.id}/image`}
+                  alt={`${editing.original_name} 영수증 원본`}
                 />
-              </label>
+              </a>
+              <details>
+                <summary>OCR 추출 텍스트</summary>
+                <pre>
+                  {editing.ocr_text || "아직 추출된 텍스트가 없습니다."}
+                </pre>
+              </details>
+            </div>
+            <fieldset className="grid-fieldset" disabled={busy || analyzing}>
+              <h3>추출값 검토</h3>
+              <p className="muted small">
+                원본을 확인해 수정한 뒤 저장하세요. 검토 사유를 비우고
+                날짜·금액을 입력하면 확인 완료됩니다.
+              </p>
+              {!!extractions.length && (
+                <details className="extraction-comparison">
+                  <summary>
+                    분석 이력·현재 값 비교 ({extractions.length}회)
+                  </summary>
+                  {extractions.map((ex) => {
+                    const value = JSON.parse(ex.extracted_json);
+                    const usage = JSON.parse(ex.usage_json || "{}");
+                    return (
+                      <div key={ex.id}>
+                        <p className="small muted">
+                          {ex.analyzed_at} · {ex.model_name} · {ex.input_kind}
+                        </p>
+                        <p className="small muted">
+                          입력 토큰 {usage.input_tokens ?? "—"} / 출력 토큰{" "}
+                          {usage.output_tokens ?? "—"} · 추정 비용{" "}
+                          {ex.estimated_cost_usd
+                            ? `$${ex.estimated_cost_usd}`
+                            : "단가 미설정"}
+                        </p>
+                        {ex.error_message && (
+                          <p className="error-text">{ex.error_message}</p>
+                        )}
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>필드</th>
+                              <th>분석 후보</th>
+                              <th>현재 수정값</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(
+                              [
+                                "transaction_at",
+                                "merchant",
+                                "final_amount_krw",
+                                "description",
+                              ] as const
+                            ).map((key) => (
+                              <tr key={key}>
+                                <th>
+                                  {
+                                    {
+                                      transaction_at: "거래일시",
+                                      merchant: "상호",
+                                      final_amount_krw: "결제금액",
+                                      description: "사용 내역",
+                                    }[key]
+                                  }
+                                </th>
+                                <td>{String(value[key] ?? "미확인")}</td>
+                                <td>{String(editing[key] ?? "미확인")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <button
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "이 분석 후보를 검토폼에 가져올까요? 저장하기 전까지 DB는 변경되지 않습니다.",
+                              )
+                            )
+                              setEditing({ ...editing, ...value });
+                          }}
+                        >
+                          이 후보를 검토폼에 가져오기
+                        </button>
+                      </div>
+                    );
+                  })}
+                </details>
+              )}
               <label className="field">
-                최종 결제금액
+                거래일시
                 <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={editing.final_amount_krw ?? ""}
+                  type="datetime-local"
+                  value={editing.transaction_at?.slice(0, 19) || ""}
                   onChange={(e) =>
                     setEditing({
                       ...editing,
-                      final_amount_krw:
-                        e.target.value === "" ? null : Number(e.target.value),
+                      transaction_at: e.target.value || null,
                     })
                   }
                 />
               </label>
-            </div>
-            <label className="field">
-              사용 내역
-              <input
-                value={editing.description}
-                onChange={(e) =>
-                  setEditing({ ...editing, description: e.target.value })
-                }
-              />
-            </label>
-            <label className="field">
-              검토 사유
-              <textarea
-                aria-label="검토 사유"
-                value={editing.review_reason}
-                onChange={(e) =>
-                  setEditing({ ...editing, review_reason: e.target.value })
-                }
-              />
-            </label>
-            <div className="actions">
-              <button
-                className="primary"
-                disabled={busy || analyzing}
-                onClick={() =>
-                  action(async () => {
-                    await api(`/receipts/${editing.id}`, "PATCH", editing);
-                    await refresh();
-                    inform("영수증 검토값을 저장했습니다.");
-                  })
-                }
-              >
-                검토값 저장
-              </button>
-              <button
-                disabled={!pending || busy}
-                onClick={() =>
-                  setEditing({
-                    ...event.receipts.find((r) => r.id === editing.id)!,
-                  })
-                }
-              >
-                검토값 되돌리기
-              </button>
-              <button
-                disabled={busy || analyzing}
-                className="danger"
-                onClick={() => {
-                  if (confirm("이 영수증 원본과 연결을 삭제할까요?"))
+              <label className="field small">
+                날짜만 확인된 경우
+                <input
+                  aria-label="거래 날짜만 입력"
+                  type="date"
+                  value={editing.transaction_at?.slice(0, 10) || ""}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      transaction_at: e.target.value || null,
+                    })
+                  }
+                />
+                <span className="muted">
+                  시간을 모르면 날짜만 저장하세요. 확정 ZIP의 검토 폴더로
+                  분리합니다.
+                </span>
+              </label>
+              <div className="form-row">
+                <label className="field">
+                  상호명
+                  <input
+                    value={editing.merchant}
+                    onChange={(e) =>
+                      setEditing({ ...editing, merchant: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  최종 결제금액
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editing.final_amount_krw ?? ""}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        final_amount_krw:
+                          e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <label className="field">
+                사용 내역
+                <input
+                  value={editing.description}
+                  onChange={(e) =>
+                    setEditing({ ...editing, description: e.target.value })
+                  }
+                />
+              </label>
+              <label className="field">
+                검토 사유
+                <textarea
+                  aria-label="검토 사유"
+                  value={editing.review_reason}
+                  onChange={(e) =>
+                    setEditing({ ...editing, review_reason: e.target.value })
+                  }
+                />
+              </label>
+              <div className="actions">
+                <button
+                  className="primary"
+                  disabled={busy || analyzing}
+                  onClick={() =>
                     action(async () => {
-                      await api(`/receipts/${editing.id}`, "DELETE");
-                      setEditing(null);
-                      setSelected(null);
+                      await api(`/receipts/${editing.id}`, "PATCH", editing);
                       await refresh();
-                    });
-                }}
-              >
-                영수증 삭제
-              </button>
-              <button
-                disabled={busy || analyzing || !!links.length}
-                onClick={() =>
-                  action(async () => {
-                    await api(`/receipts/${editing.id}/exclude`, "POST");
-                    await refresh();
-                    inform("중복 영수증을 제외했습니다. 원본은 보관합니다.");
-                  })
-                }
-              >
-                중복 제외
-              </button>
-            </div>
-            <div className="link-section">
-              <h3>지출 행 연결</h3>
-              <p className="muted small">
-                배분액 합계가 영수증 결제금액을 넘지 않도록 연결합니다.
-              </p>
-              {suggestions
-                .find((s) => s.receipt_id === selected)
-                ?.candidates.map((c) => {
-                  const x = event.expenses.find((e) => e.id === c.expense_id);
-                  return (
-                    <button
-                      key={c.expense_id}
-                      className="suggestion"
-                      onClick={() => {
-                        setExpense(String(c.expense_id));
-                        setAllocated(String(x?.amount_krw || 0));
-                      }}
-                    >
-                      추천 #
-                      {event.expenses.findIndex((e) => e.id === c.expense_id) +
+                      inform("영수증 검토값을 저장했습니다.");
+                    })
+                  }
+                >
+                  검토값 저장
+                </button>
+                <button
+                  disabled={!pending || busy}
+                  onClick={() =>
+                    setEditing({
+                      ...event.receipts.find((r) => r.id === editing.id)!,
+                    })
+                  }
+                >
+                  검토값 되돌리기
+                </button>
+                <button
+                  disabled={busy || analyzing}
+                  className="danger"
+                  onClick={() => {
+                    if (confirm("이 영수증 원본과 연결을 삭제할까요?"))
+                      action(async () => {
+                        await api(`/receipts/${editing.id}`, "DELETE");
+                        setEditing(null);
+                        setSelected(null);
+                        await refresh();
+                      });
+                  }}
+                >
+                  영수증 삭제
+                </button>
+                <button
+                  disabled={busy || analyzing || !!links.length}
+                  onClick={() =>
+                    action(async () => {
+                      await api(`/receipts/${editing.id}/exclude`, "POST");
+                      await refresh();
+                      inform("중복 영수증을 제외했습니다. 원본은 보관합니다.");
+                    })
+                  }
+                >
+                  중복 제외
+                </button>
+              </div>
+              <div className="link-section">
+                <h3>지출 행 연결</h3>
+                <p className="muted small">
+                  배분액 합계가 영수증 결제금액을 넘지 않도록 연결합니다.
+                </p>
+                {suggestions
+                  .find((s) => s.receipt_id === selected)
+                  ?.candidates.map((c) => {
+                    const x = event.expenses.find((e) => e.id === c.expense_id);
+                    return (
+                      <button
+                        key={c.expense_id}
+                        className="suggestion"
+                        onClick={() => {
+                          setExpense(String(c.expense_id));
+                          setAllocated(String(x?.amount_krw || 0));
+                        }}
+                      >
+                        추천 #
+                        {event.expenses.findIndex(
+                          (e) => e.id === c.expense_id,
+                        ) + 1}{" "}
+                        {x?.item_name} · {c.score}점
+                      </button>
+                    );
+                  })}
+                {links.map((l) => (
+                  <div className="existing-link" key={l.expense_id}>
+                    <span>
+                      #
+                      {event.expenses.findIndex((e) => e.id === l.expense_id) +
                         1}{" "}
-                      {x?.item_name} · {c.score}점
+                      ·{" "}
+                      {
+                        event.expenses.find((e) => e.id === l.expense_id)
+                          ?.item_name
+                      }{" "}
+                      · ₩ {won(l.allocated_amount_krw)}
+                    </span>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        action(async () => {
+                          await api(
+                            `/events/${event.id}/receipt-links/${l.expense_id}/${l.receipt_id}`,
+                            "DELETE",
+                          );
+                          await refresh();
+                        })
+                      }
+                    >
+                      연결 해제
                     </button>
-                  );
-                })}
-              {links.map((l) => (
-                <div className="existing-link" key={l.expense_id}>
-                  <span>
-                    #
-                    {event.expenses.findIndex((e) => e.id === l.expense_id) + 1}{" "}
-                    ·{" "}
-                    {
-                      event.expenses.find((e) => e.id === l.expense_id)
-                        ?.item_name
-                    }{" "}
-                    · ₩ {won(l.allocated_amount_krw)}
-                  </span>
+                  </div>
+                ))}
+                <div className="actions wrap">
+                  <select
+                    aria-label="연결 지출 선택"
+                    value={expense}
+                    onChange={(e) => setExpense(e.target.value)}
+                  >
+                    <option value="">연결할 지출 선택</option>
+                    {event.expenses.map((x, i) => (
+                      <option value={x.id} key={x.id}>
+                        #{i + 1} {x.item_name} (₩ {won(x.amount_krw)})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    aria-label="배분금액"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="배분금액"
+                    value={allocated}
+                    onChange={(e) => setAllocated(e.target.value)}
+                  />
                   <button
-                    disabled={busy}
+                    disabled={busy || !expense || allocated === ""}
                     onClick={() =>
                       action(async () => {
-                        await api(
-                          `/events/${event.id}/receipt-links/${l.expense_id}/${l.receipt_id}`,
-                          "DELETE",
-                        );
+                        await api(`/events/${event.id}/receipt-links`, "POST", {
+                          expense_id: Number(expense),
+                          receipt_id: editing.id,
+                          allocated_amount_krw: Number(allocated),
+                        });
                         await refresh();
+                        inform("영수증을 연결했습니다.");
                       })
                     }
                   >
-                    연결 해제
+                    연결 확정
                   </button>
                 </div>
-              ))}
-              <div className="actions wrap">
-                <select
-                  aria-label="연결 지출 선택"
-                  value={expense}
-                  onChange={(e) => setExpense(e.target.value)}
-                >
-                  <option value="">연결할 지출 선택</option>
-                  {event.expenses.map((x, i) => (
-                    <option value={x.id} key={x.id}>
-                      #{i + 1} {x.item_name} (₩ {won(x.amount_krw)})
-                    </option>
-                  ))}
-                </select>
-                <input
-                  aria-label="배분금액"
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="배분금액"
-                  value={allocated}
-                  onChange={(e) => setAllocated(e.target.value)}
-                />
-                <button
-                  disabled={busy || !expense || allocated === ""}
-                  onClick={() =>
-                    action(async () => {
-                      await api(`/events/${event.id}/receipt-links`, "POST", {
-                        expense_id: Number(expense),
-                        receipt_id: editing.id,
-                        allocated_amount_krw: Number(allocated),
-                      });
-                      await refresh();
-                      inform("영수증을 연결했습니다.");
-                    })
-                  }
-                >
-                  연결 확정
-                </button>
-              </div>
-              <div className="actions wrap">
-                {!hideCategories && (
-                  <select
-                    aria-label="새 지출 항목"
-                    value={newCat}
-                    onChange={(e) => setNewCat(e.target.value)}
+                <div className="actions wrap">
+                  {!hideCategories && (
+                    <select
+                      aria-label="새 지출 항목"
+                      value={newCat}
+                      onChange={(e) => setNewCat(e.target.value)}
+                    >
+                      <option value="">신규 지출 항목 선택</option>
+                      {event.categories
+                        .filter((c) => c.is_active)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {categoryNames?.[c.id] || c.name}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                  <button
+                    disabled={busy || !newCat || !!links.length}
+                    onClick={() =>
+                      action(async () => {
+                        await api(
+                          `/receipts/${editing.id}/create-expense?category_id=${newCat}`,
+                          "POST",
+                        );
+                        await refresh();
+                        inform("영수증으로 새 지출을 만들었습니다.");
+                      })
+                    }
                   >
-                    <option value="">신규 지출 항목 선택</option>
-                    {event.categories
-                      .filter((c) => c.is_active)
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {categoryNames?.[c.id] || c.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
-                <button
-                  disabled={busy || !newCat || !!links.length}
-                  onClick={() =>
-                    action(async () => {
-                      await api(
-                        `/receipts/${editing.id}/create-expense?category_id=${newCat}`,
-                        "POST",
-                      );
-                      await refresh();
-                      inform("영수증으로 새 지출을 만들었습니다.");
-                    })
-                  }
-                >
-                  이 영수증으로 지출 생성
-                </button>
+                    이 영수증으로 지출 생성
+                  </button>
+                </div>
               </div>
-            </div>
-          </fieldset>
-        </div>
+            </fieldset>
+          </div>
+        </Dialog>
       )}
     </div>
   );
