@@ -762,6 +762,8 @@ def receipt_image(receipt_id: int, db: Session = Depends(session)):
 @app.patch("/api/receipts/{receipt_id}")
 def receipt_edit(receipt_id: int, data: ReceiptIn, db: Session = Depends(session)):
     r = get(db, Receipt, receipt_id)
+    if r.ocr_status == "확인됨":
+        raise HTTPException(409, "확인된 영수증은 재검토를 시작한 뒤 수정하세요.")
     if any(j["event_id"] == r.event_id and j["status"] == "running" for j in JOBS.values()):
         raise HTTPException(409, "OCR 완료 후 수정하세요.")
     for k, v in data.model_dump().items():
@@ -787,10 +789,21 @@ def receipt_edit(receipt_id: int, data: ReceiptIn, db: Session = Depends(session
     if r.final_amount_krw is None:
         reasons.append("결제금액 누락")
     r.review_reason = "; ".join(reasons)
-    r.ocr_status = "검토 필요" if data.review_reason else "확인됨"
+    r.ocr_status = "확인됨"
     r.edited_at = now()
     touch(db, r.event_id)
     db.commit()
+    return encode(r)
+
+
+@app.post("/api/receipts/{receipt_id}/review")
+def receipt_review(receipt_id: int, db: Session = Depends(session)):
+    r = get(db, Receipt, receipt_id)
+    if r.ocr_status == "확인됨":
+        r.ocr_status = "검토 필요"
+        r.edited_at = now()
+        touch(db, r.event_id)
+        db.commit()
     return encode(r)
 
 

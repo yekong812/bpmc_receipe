@@ -212,7 +212,7 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   await page.getByLabel("최종 결제금액", { exact: true }).fill("5000");
   await page.getByLabel("사용 내역", { exact: true }).fill("영수증 간식");
   await page.getByLabel("검토 사유", { exact: true }).fill("");
-  await page.getByRole("button", { name: "검토값 저장", exact: true }).click();
+  await page.getByRole("button", { name: "검토값 확인", exact: true }).click();
   await expect(receipt).toContainText("확인됨");
   await expect(page.getByLabel("새 지출 항목", { exact: true })).toHaveCount(0);
   await page

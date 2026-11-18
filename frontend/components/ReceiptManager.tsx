@@ -122,6 +122,7 @@ export default function ReceiptManager({
     };
   }, [selected, event.version]);
   const analyzing = job?.status === "running";
+  const confirmed = editing?.ocr_status === "확인됨";
   function select(r: Receipt) {
     setSelected(r.id);
     setEditing({ ...r });
@@ -259,10 +260,10 @@ export default function ReceiptManager({
         )}
       </div>
       <p className="muted small">
-        JPG·PNG·WebP / ZIP당 최대 300장, 60MB (압축 해제 후 총 250MB) ·
-        이미지 한 장당 최대 20MB · 개별 이미지 업로드 가능 ·
-        날짜·금액을 확인하고 영수증을 연결하세요. 분석 후 지출 초안을 자동
-        생성하며 최종 확정은 사용자만 할 수 있습니다.
+        JPG·PNG·WebP / ZIP당 최대 300장, 60MB (압축 해제 후 총 250MB) · 이미지
+        한 장당 최대 20MB · 개별 이미지 업로드 가능 · 날짜·금액을 확인하고
+        영수증을 연결하세요. 분석 후 지출 초안을 자동 생성하며 최종 확정은
+        사용자만 할 수 있습니다.
       </p>
       {job && job.status !== "running" && (
         <p className="small muted">
@@ -379,176 +380,189 @@ export default function ReceiptManager({
             <fieldset className="grid-fieldset" disabled={busy || analyzing}>
               <h3>추출값 검토</h3>
               <p className="muted small">
-                원본을 확인해 수정한 뒤 저장하세요. 검토 사유를 비우고
-                날짜·금액을 입력하면 확인 완료됩니다.
+                {confirmed
+                  ? "확인된 검토값을 수정하려면 재검토를 누르세요."
+                  : "원본과 추출값을 확인한 뒤 검토값 확인을 누르세요. 검토 사유는 메모로 남겨둘 수 있습니다."}
               </p>
-              {!!extractions.length && (
-                <details className="extraction-comparison">
-                  <summary>
-                    분석 이력·현재 값 비교 ({extractions.length}회)
-                  </summary>
-                  {extractions.map((ex) => {
-                    const value = JSON.parse(ex.extracted_json);
-                    const usage = JSON.parse(ex.usage_json || "{}");
-                    return (
-                      <div key={ex.id}>
-                        <p className="small muted">
-                          {ex.analyzed_at} · {ex.model_name} · {ex.input_kind}
-                        </p>
-                        <p className="small muted">
-                          입력 토큰 {usage.input_tokens ?? "—"} / 출력 토큰{" "}
-                          {usage.output_tokens ?? "—"} · 추정 비용{" "}
-                          {ex.estimated_cost_usd
-                            ? `$${ex.estimated_cost_usd}`
-                            : "단가 미설정"}
-                        </p>
-                        {ex.error_message && (
-                          <p className="error-text">{ex.error_message}</p>
-                        )}
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>필드</th>
-                              <th>분석 후보</th>
-                              <th>현재 수정값</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(
-                              [
-                                "transaction_at",
-                                "merchant",
-                                "final_amount_krw",
-                                "description",
-                              ] as const
-                            ).map((key) => (
-                              <tr key={key}>
-                                <th>
-                                  {
-                                    {
-                                      transaction_at: "거래일시",
-                                      merchant: "상호",
-                                      final_amount_krw: "결제금액",
-                                      description: "사용 내역",
-                                    }[key]
-                                  }
-                                </th>
-                                <td>{String(value[key] ?? "미확인")}</td>
-                                <td>{String(editing[key] ?? "미확인")}</td>
+              <fieldset className="grid-fieldset" disabled={confirmed}>
+                {!!extractions.length && (
+                  <details className="extraction-comparison">
+                    <summary>
+                      분석 이력·현재 값 비교 ({extractions.length}회)
+                    </summary>
+                    {extractions.map((ex) => {
+                      const value = JSON.parse(ex.extracted_json);
+                      const usage = JSON.parse(ex.usage_json || "{}");
+                      return (
+                        <div key={ex.id}>
+                          <p className="small muted">
+                            {ex.analyzed_at} · {ex.model_name} · {ex.input_kind}
+                          </p>
+                          <p className="small muted">
+                            입력 토큰 {usage.input_tokens ?? "—"} / 출력 토큰{" "}
+                            {usage.output_tokens ?? "—"} · 추정 비용{" "}
+                            {ex.estimated_cost_usd
+                              ? `$${ex.estimated_cost_usd}`
+                              : "단가 미설정"}
+                          </p>
+                          {ex.error_message && (
+                            <p className="error-text">{ex.error_message}</p>
+                          )}
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>필드</th>
+                                <th>분석 후보</th>
+                                <th>현재 수정값</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        <button
-                          onClick={() => {
-                            if (
-                              confirm(
-                                "이 분석 후보를 검토폼에 가져올까요? 저장하기 전까지 DB는 변경되지 않습니다.",
+                            </thead>
+                            <tbody>
+                              {(
+                                [
+                                  "transaction_at",
+                                  "merchant",
+                                  "final_amount_krw",
+                                  "description",
+                                ] as const
+                              ).map((key) => (
+                                <tr key={key}>
+                                  <th>
+                                    {
+                                      {
+                                        transaction_at: "거래일시",
+                                        merchant: "상호",
+                                        final_amount_krw: "결제금액",
+                                        description: "사용 내역",
+                                      }[key]
+                                    }
+                                  </th>
+                                  <td>{String(value[key] ?? "미확인")}</td>
+                                  <td>{String(editing[key] ?? "미확인")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "이 분석 후보를 검토폼에 가져올까요? 저장하기 전까지 DB는 변경되지 않습니다.",
+                                )
                               )
-                            )
-                              setEditing({ ...editing, ...value });
-                          }}
-                        >
-                          이 후보를 검토폼에 가져오기
-                        </button>
-                      </div>
-                    );
-                  })}
-                </details>
-              )}
-              <label className="field">
-                거래일시
-                <input
-                  type="datetime-local"
-                  value={editing.transaction_at?.slice(0, 19) || ""}
-                  onChange={(e) =>
-                    setEditing({
-                      ...editing,
-                      transaction_at: e.target.value || null,
-                    })
-                  }
-                />
-              </label>
-              <label className="field small">
-                날짜만 확인된 경우
-                <input
-                  aria-label="거래 날짜만 입력"
-                  type="date"
-                  value={editing.transaction_at?.slice(0, 10) || ""}
-                  onChange={(e) =>
-                    setEditing({
-                      ...editing,
-                      transaction_at: e.target.value || null,
-                    })
-                  }
-                />
-                <span className="muted">
-                  시간을 모르면 날짜만 저장하세요. 확정 ZIP의 검토 폴더로
-                  분리합니다.
-                </span>
-              </label>
-              <div className="form-row">
+                                setEditing({ ...editing, ...value });
+                            }}
+                          >
+                            이 후보를 검토폼에 가져오기
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </details>
+                )}
                 <label className="field">
-                  상호명
+                  거래일시
                   <input
-                    value={editing.merchant}
-                    onChange={(e) =>
-                      setEditing({ ...editing, merchant: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  최종 결제금액
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={editing.final_amount_krw ?? ""}
+                    type="datetime-local"
+                    value={editing.transaction_at?.slice(0, 19) || ""}
                     onChange={(e) =>
                       setEditing({
                         ...editing,
-                        final_amount_krw:
-                          e.target.value === "" ? null : Number(e.target.value),
+                        transaction_at: e.target.value || null,
                       })
                     }
                   />
                 </label>
-              </div>
-              <label className="field">
-                사용 내역
-                <input
-                  value={editing.description}
-                  onChange={(e) =>
-                    setEditing({ ...editing, description: e.target.value })
-                  }
-                />
-              </label>
-              <label className="field">
-                검토 사유
-                <textarea
-                  aria-label="검토 사유"
-                  value={editing.review_reason}
-                  onChange={(e) =>
-                    setEditing({ ...editing, review_reason: e.target.value })
-                  }
-                />
-              </label>
+                <label className="field small">
+                  날짜만 확인된 경우
+                  <input
+                    aria-label="거래 날짜만 입력"
+                    type="date"
+                    value={editing.transaction_at?.slice(0, 10) || ""}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        transaction_at: e.target.value || null,
+                      })
+                    }
+                  />
+                  <span className="muted">
+                    시간을 모르면 날짜만 저장하세요. 확정 ZIP의 검토 폴더로
+                    분리합니다.
+                  </span>
+                </label>
+                <div className="form-row">
+                  <label className="field">
+                    상호명
+                    <input
+                      value={editing.merchant}
+                      onChange={(e) =>
+                        setEditing({ ...editing, merchant: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    최종 결제금액
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={editing.final_amount_krw ?? ""}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          final_amount_krw:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <label className="field">
+                  사용 내역
+                  <input
+                    value={editing.description}
+                    onChange={(e) =>
+                      setEditing({ ...editing, description: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  검토 사유
+                  <textarea
+                    aria-label="검토 사유"
+                    value={editing.review_reason}
+                    onChange={(e) =>
+                      setEditing({ ...editing, review_reason: e.target.value })
+                    }
+                  />
+                </label>
+              </fieldset>
               <div className="actions">
                 <button
                   className="primary"
                   disabled={busy || analyzing}
                   onClick={() =>
                     action(async () => {
-                      await api(`/receipts/${editing.id}`, "PATCH", editing);
+                      if (confirmed) {
+                        await api(`/receipts/${editing.id}/review`, "POST");
+                      } else {
+                        await api(`/receipts/${editing.id}`, "PATCH", editing);
+                      }
                       await refresh();
-                      inform("영수증 검토값을 저장했습니다.");
+                      inform(
+                        confirmed
+                          ? "영수증을 검토 필요 상태로 되돌렸습니다."
+                          : "영수증 검토값을 확인했습니다.",
+                      );
                     })
                   }
                 >
-                  검토값 저장
+                  {confirmed ? "재검토" : "검토값 확인"}
                 </button>
                 <button
-                  disabled={!pending || busy}
+                  disabled={confirmed || !pending || busy}
                   onClick={() =>
                     setEditing({
                       ...event.receipts.find((r) => r.id === editing.id)!,

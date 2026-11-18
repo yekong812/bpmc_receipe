@@ -144,16 +144,18 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await review.getByLabel("상호명", { exact: true }).fill("BPMC");
     await review.getByLabel("최종 결제금액", { exact: true }).fill("5000");
     await review.getByLabel("사용 내역", { exact: true }).fill("테스트 간식");
-    await review.getByLabel("검토 사유", { exact: true }).fill("");
+    const reviewReason = review.getByLabel("검토 사유", { exact: true });
+    await reviewReason.fill("원본에서 결제금액을 직접 확인함");
     page.once("dialog", (dialog) => dialog.dismiss());
     await page.keyboard.press("Escape");
     await expect(review.getByLabel("상호명", { exact: true })).toHaveValue(
       "BPMC",
     );
     await review
-      .getByRole("button", { name: "검토값 저장", exact: true })
+      .getByRole("button", { name: "검토값 확인", exact: true })
       .click();
     await expect(receiptRow).toContainText("확인됨");
+    await expect(reviewReason).toHaveValue("원본에서 결제금액을 직접 확인함");
     await review
       .getByLabel("연결 지출 선택", { exact: true })
       .selectOption({ label: "#1 테스트 간식 (₩ 5,000)" });
@@ -165,6 +167,30 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await review.getByRole("button", { name: "닫기", exact: true }).click();
     await expect(review).toBeHidden();
     await expect(receiptRow).toBeFocused();
+    await receiptRow.press("Enter");
+    await expect(reviewReason).toHaveValue("원본에서 결제금액을 직접 확인함");
+    await expect(reviewReason).toBeDisabled();
+    await expect(
+      review.getByLabel("최종 결제금액", { exact: true }),
+    ).toBeDisabled();
+    const receipt = (
+      await (await request.get(`/api/events/${event.id}/receipts`)).json()
+    )[0];
+    const blockedEdit = await request.patch(`/api/receipts/${receipt.id}`, {
+      data: { ...receipt, merchant: "확인된 값 수정 시도" },
+    });
+    expect(blockedEdit.status()).toBe(409);
+    await review.getByRole("button", { name: "재검토", exact: true }).click();
+    await expect(receiptRow).toContainText("검토 필요");
+    await expect(reviewReason).toBeEnabled();
+    await reviewReason.fill("재검토 후 원본과 일치 확인");
+    await review
+      .getByRole("button", { name: "검토값 확인", exact: true })
+      .click();
+    await expect(receiptRow).toContainText("확인됨");
+    await expect(reviewReason).toBeDisabled();
+    await expect(reviewReason).toHaveValue("재검토 후 원본과 일치 확인");
+    await review.getByRole("button", { name: "닫기", exact: true }).click();
     const [zip] = await Promise.all([
       page.waitForEvent("download"),
       detail.getByRole("button", { name: "↧ 정리된 ZIP 다운로드" }).click(),
@@ -339,7 +365,7 @@ test("LLM 분석 이력의 사용량 표시와 후보값 수동 반영", async (
       detail.getByLabel("최종 결제금액", { exact: true }),
     ).toHaveValue("7500");
     await detail
-      .getByRole("button", { name: "검토값 저장", exact: true })
+      .getByRole("button", { name: "검토값 확인", exact: true })
       .click();
     await expect(
       detail.getByRole("row").filter({ hasText: "receipt.png" }),

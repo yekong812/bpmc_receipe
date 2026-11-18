@@ -352,12 +352,14 @@ def test_receipt_allocation_duplicate_preview_export_and_cascade(client):
     )
     d = c.get(f"/api/events/{e['id']}").json()
     assert d["matched_count"] == 2 and sum(l["allocated_amount_krw"] for l in d["links"]) == 5000
+    assert c.post(f"/api/receipts/{r['id']}/review").json()["ocr_status"] == "검토 필요"
     assert (
         c.patch(
             f"/api/receipts/{r['id']}", json={"transaction_at": None, "final_amount_krw": 1000}
         ).status_code
         == 422
     )
+    confirm_receipt(c, r)
     out = c.get(f"/api/events/{e['id']}/receipts/export-zip?draft=true")
     assert out.status_code == 200
     with zipfile.ZipFile(io.BytesIO(out.content)) as z:
