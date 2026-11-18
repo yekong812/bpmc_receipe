@@ -78,6 +78,13 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
   );
   await page.getByRole("tab", { name: "경상비 장부", exact: true }).click();
   await page.getByRole("button", { name: "＋ 거래 추가", exact: true }).click();
+  const entries = page.locator(".annual-entry-table");
+  await expect(
+    entries.getByRole("columnheader", { name: "No.", exact: true }),
+  ).toBeVisible();
+  await expect(
+    entries.getByRole("cell", { name: "1", exact: true }),
+  ).toBeVisible();
   await page
     .getByLabel("1거래 항", { exact: true })
     .selectOption({ label: "운영비" });

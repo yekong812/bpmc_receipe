@@ -156,14 +156,21 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       .click();
     await expect(receiptRow).toContainText("확인됨");
     await expect(reviewReason).toHaveValue("원본에서 결제금액을 직접 확인함");
+    await expect(
+      review.getByRole("button", {
+        name: /추천 #1 · 2026-11-08 · 테스트 간식/,
+      }),
+    ).toBeVisible();
     await review
       .getByLabel("연결 지출 선택", { exact: true })
-      .selectOption({ label: "#1 테스트 간식 (₩ 5,000)" });
+      .selectOption({ label: "#1 · 2026-11-08 · 테스트 간식 (₩ 5,000)" });
     await review.getByLabel("배분금액", { exact: true }).fill("5000");
     await review
       .getByRole("button", { name: "연결 확정", exact: true })
       .click();
-    await expect(review.locator(".existing-link")).toContainText("5,000");
+    await expect(review.locator(".existing-link")).toContainText(
+      "#1 · 2026-11-08 · 테스트 간식 · ₩ 5,000",
+    );
     await review.getByRole("button", { name: "닫기", exact: true }).click();
     await expect(review).toBeHidden();
     await expect(receiptRow).toBeFocused();

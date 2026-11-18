@@ -204,6 +204,7 @@ export default function EntryGrid({
                     }
                   />
                 </th>
+                <th scope="col">No.</th>
                 <th>날짜</th>
                 {ordinary && (
                   <>
@@ -243,6 +244,7 @@ export default function EntryGrid({
                         }
                       />
                     </td>
+                    <td>{i + 1}</td>
                     <td>
                       <input
                         aria-label={`${i + 1}거래 날짜`}

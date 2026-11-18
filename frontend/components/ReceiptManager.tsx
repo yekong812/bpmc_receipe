@@ -607,53 +607,53 @@ export default function ReceiptManager({
                 {suggestions
                   .find((s) => s.receipt_id === selected)
                   ?.candidates.map((c) => {
-                    const x = event.expenses.find((e) => e.id === c.expense_id);
+                    const i = event.expenses.findIndex(
+                      (e) => e.id === c.expense_id,
+                    );
+                    const x = event.expenses[i];
+                    if (!x) return null;
                     return (
                       <button
                         key={c.expense_id}
                         className="suggestion"
                         onClick={() => {
                           setExpense(String(c.expense_id));
-                          setAllocated(String(x?.amount_krw || 0));
+                          setAllocated(String(x.amount_krw ?? 0));
                         }}
                       >
-                        추천 #
-                        {event.expenses.findIndex(
-                          (e) => e.id === c.expense_id,
-                        ) + 1}{" "}
-                        {x?.item_name} · {c.score}점
+                        추천 #{i + 1} · {x.expense_date || "날짜 미입력"} ·{" "}
+                        {x.item_name} · {c.score}점
                       </button>
                     );
                   })}
-                {links.map((l) => (
-                  <div className="existing-link" key={l.expense_id}>
-                    <span>
-                      #
-                      {event.expenses.findIndex((e) => e.id === l.expense_id) +
-                        1}{" "}
-                      ·{" "}
-                      {
-                        event.expenses.find((e) => e.id === l.expense_id)
-                          ?.item_name
-                      }{" "}
-                      · ₩ {won(l.allocated_amount_krw)}
-                    </span>
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        action(async () => {
-                          await api(
-                            `/events/${event.id}/receipt-links/${l.expense_id}/${l.receipt_id}`,
-                            "DELETE",
-                          );
-                          await refresh();
-                        })
-                      }
-                    >
-                      연결 해제
-                    </button>
-                  </div>
-                ))}
+                {links.map((l) => {
+                  const i = event.expenses.findIndex(
+                    (e) => e.id === l.expense_id,
+                  );
+                  const x = event.expenses[i];
+                  return (
+                    <div className="existing-link" key={l.expense_id}>
+                      <span>
+                        #{i + 1} · {x?.expense_date || "날짜 미입력"} ·{" "}
+                        {x?.item_name} · ₩ {won(l.allocated_amount_krw)}
+                      </span>
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          action(async () => {
+                            await api(
+                              `/events/${event.id}/receipt-links/${l.expense_id}/${l.receipt_id}`,
+                              "DELETE",
+                            );
+                            await refresh();
+                          })
+                        }
+                      >
+                        연결 해제
+                      </button>
+                    </div>
+                  );
+                })}
                 <div className="actions wrap">
                   <select
                     aria-label="연결 지출 선택"
@@ -663,7 +663,8 @@ export default function ReceiptManager({
                     <option value="">연결할 지출 선택</option>
                     {event.expenses.map((x, i) => (
                       <option value={x.id} key={x.id}>
-                        #{i + 1} {x.item_name} (₩ {won(x.amount_krw)})
+                        #{i + 1} · {x.expense_date || "날짜 미입력"} ·{" "}
+                        {x.item_name} (₩ {won(x.amount_krw)})
                       </option>
                     ))}
                   </select>
