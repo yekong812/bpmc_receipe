@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
+from typing import Literal
+from pydantic import BaseModel, Field
 from urllib.parse import quote
 from fastapi import (
     BackgroundTasks,
@@ -39,6 +41,9 @@ from .models import (
     Extraction,
     ChangeLog,
     ProcessingJob,
+    AnnualBook,
+    AnnualEntry,
+    BudgetItem,
     now,
 )
 from .schemas import (
@@ -72,6 +77,9 @@ async def lifespan(app):
     from alembic import command
 
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    from .migration_backup import backup_before_upgrade
+
+    backup_before_upgrade(config)
     command.upgrade(config, "head")
     JOBS.clear()
     with SessionLocal() as db:
@@ -91,6 +99,14 @@ def write_guard(request: Request, db: Session = Depends(session)):
     if request.url.path.endswith(("/reopen", "/duplicate")):
         return
     event_id = path.get("event_id")
+    if path.get("book_id"):
+        book = db.get(AnnualBook, int(path["book_id"]))
+        if book:
+            event_id = book.owner_event_id
+    if path.get("entry_id"):
+        entry = db.get(AnnualEntry, int(path["entry_id"]))
+        if entry:
+            event_id = db.get(AnnualBook, entry.book_id).owner_event_id
     if not event_id:
         for field, cls in [
             ("expense_id", Expense),
@@ -102,6 +118,18 @@ def write_guard(request: Request, db: Session = Depends(session)):
                 event_id = obj.event_id if obj else None
                 break
     if event_id:
+        current = db.get(Event, int(event_id))
+        if (
+            current
+            and current.scope_type != "event"
+            and (
+                ("/expenses" in request.url.path or "/event-expenses" in request.url.path)
+                or "/categories" in request.url.path
+                or "/events/" in request.url.path
+                and "/excel/import/" in request.url.path
+            )
+        ):
+            raise HTTPException(422, "연도별 장부 거래·항목은 해당 메뉴의 전용 API에서 수정하세요.")
         # Explicit deletion removes the entire event, including its retained snapshots.
         if not (request.method == "DELETE" and request.url.path == f"/api/events/{event_id}"):
             editable(db, int(event_id))
@@ -260,7 +288,13 @@ def list_events(
     event_date_to: str = "",
     db: Session = Depends(session),
 ):
-    events = list(db.scalars(select(Event).order_by(Event.start_date.desc(), Event.id.desc())))
+    events = list(
+        db.scalars(
+            select(Event)
+            .where(Event.scope_type == "event")
+            .order_by(Event.start_date.desc(), Event.id.desc())
+        )
+    )
     return [
         list_detail(db, e)
         for e in events
@@ -422,6 +456,7 @@ def add_expense(event_id: int, data: ExpenseIn, db: Session = Depends(session)):
     return encode(x)
 
 
+@app.patch("/api/event-expenses/{expense_id}")
 @app.patch("/api/expenses/{expense_id}")
 def update_expense(expense_id: int, data: ExpenseIn, db: Session = Depends(session)):
     x = get(db, Expense, expense_id)
@@ -431,6 +466,7 @@ def update_expense(expense_id: int, data: ExpenseIn, db: Session = Depends(sessi
     return encode(x)
 
 
+@app.delete("/api/event-expenses/{expense_id}", status_code=204)
 @app.delete("/api/expenses/{expense_id}", status_code=204)
 def remove_expense(expense_id: int, db: Session = Depends(session)):
     x = get(db, Expense, expense_id)
@@ -608,17 +644,44 @@ def excel_download(
 
 @app.post("/api/events/{event_id}/receipts/upload")
 async def receipt_upload(
-    event_id: int, file: UploadFile = File(...), db: Session = Depends(session)
+    event_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(session),
+    confirm_reuse: bool = Form(False),
 ):
     get(db, Event, event_id)
     data = await read_upload(file, 50 * 1024**2)
     try:
-        images = unpack_images(data)
+        if (file.filename or "").lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            if len(data) > 15 * 1024**2:
+                raise ValueError("이미지 한 장은 15MB까지 지원합니다.")
+            wrapped = io.BytesIO()
+            with zipfile.ZipFile(wrapped, "w") as z:
+                z.writestr(Path(file.filename).name, data)
+            images = unpack_images(wrapped.getvalue())
+        else:
+            images = unpack_images(data)
     except Exception as exc:
         raise HTTPException(
             422, str(exc) if isinstance(exc, ValueError) else "유효한 이미지 ZIP을 업로드하세요."
         ) from exc
+    local_hashes = {r.sha256 for r in rows(db, Receipt, event_id)}
+    hashes = {im[3] for im in images} - local_hashes
+    other = list(
+        db.scalars(select(Receipt).where(Receipt.sha256.in_(hashes), Receipt.event_id != event_id))
+    )
+    if other and not confirm_reuse:
+        raise HTTPException(
+            409, "다른 장부·행사에 같은 영수증이 있습니다. 중복 반영을 확인한 뒤 다시 업로드하세요."
+        )
     seen = {r.sha256 for r in rows(db, Receipt, event_id)}
+    previous_numbers = [r.receipt_number or 0 for r in rows(db, Receipt, event_id)]
+    for archived in db.scalars(select(FinalVersion).where(FinalVersion.event_id == event_id)):
+        previous_numbers.extend(
+            r.get("receipt_number") or i
+            for i, r in enumerate(json.loads(archived.snapshot_json)["receipts"], 1)
+        )
+    next_number = max(previous_numbers, default=0) + 1
     saved = []
     count = 0
     duplicates = 0
@@ -628,7 +691,16 @@ async def receipt_upload(
                 duplicates += 1
                 continue
             seen.add(digest)
-            rel = f"receipts/{uuid.uuid4().hex}{suffix}"
+            scope = get(db, Event, event_id)
+            annual_scope = db.scalar(
+                select(AnnualBook).where(AnnualBook.owner_event_id == event_id)
+            )
+            folder = (
+                f"{scope.scope_type}/{annual_scope.year}/{event_id}"
+                if annual_scope
+                else f"event/{event_id}"
+            )
+            rel = f"receipts/{folder}/{uuid.uuid4().hex}{suffix}"
             path = STORAGE / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(raw)
@@ -636,6 +708,7 @@ async def receipt_upload(
             db.add(
                 Receipt(
                     event_id=event_id,
+                    receipt_number=next_number,
                     original_name=name,
                     stored_path=rel,
                     sha256=digest,
@@ -643,6 +716,7 @@ async def receipt_upload(
                 )
             )
             count += 1
+            next_number += 1
         touch(db, event_id)
         db.commit()
     except Exception:
@@ -650,7 +724,11 @@ async def receipt_upload(
         for p in saved:
             p.unlink(missing_ok=True)
         raise
-    return {"uploaded_count": count, "duplicate_count": duplicates}
+    return {
+        "uploaded_count": count,
+        "duplicate_count": duplicates,
+        "cross_scope_duplicate_count": len(other),
+    }
 
 
 @app.get("/api/events/{event_id}/receipts")
@@ -730,9 +808,12 @@ def generate_receipt_draft(db, r, result, source_type="ocr"):
         db.add(c)
         db.flush()
         cats = [c]
+    suggested = next((c for c in cats if c.id == result.get("suggested_category_id")), None)
+    event = db.get(Event, r.event_id)
+    fallback = next((c for c in cats if c.name == "미분류"), cats[0])
     x = Expense(
         event_id=r.event_id,
-        category_id=cats[0].id,
+        category_id=(suggested or fallback).id,
         expense_date=day or None,
         item_name=result.get("description", "")[:500],
         amount_krw=amount,
@@ -747,6 +828,10 @@ def generate_receipt_draft(db, r, result, source_type="ocr"):
     db.add(x)
     db.flush()
     db.add(Link(expense_id=x.id, receipt_id=r.id, allocated_amount_krw=amount))
+    if event.scope_type != "event":
+        from .annual_service import sync_generated_entry
+
+        sync_generated_entry(db, event, x)
     audit(db, r.event_id, "auto_draft", None, encode(x), x.id, source_type)
 
 
@@ -799,6 +884,7 @@ def run_ocr(job_id, ids):
                     if not vision_only:
                         db.add(
                             Extraction(
+                                processing_job_id=job_id,
                                 receipt_id=r.id,
                                 ocr_raw_text=result.get("ocr_text", ""),
                                 extracted_json=json.dumps(rule_result, ensure_ascii=False),
@@ -806,8 +892,13 @@ def run_ocr(job_id, ids):
                                 input_kind="ocr",
                             )
                         )
+                    from .annual_service import context_categories
+
                     llm = extract_receipt(
-                        str(STORAGE / r.stored_path), result.get("ocr_text", ""), rule_result
+                        str(STORAGE / r.stored_path),
+                        result.get("ocr_text", ""),
+                        rule_result,
+                        context_categories(db, event),
                     )
                     if llm.candidate:
                         result = llm.candidate
@@ -823,6 +914,7 @@ def run_ocr(job_id, ids):
                     if llm.attempted or llm.error:
                         db.add(
                             Extraction(
+                                processing_job_id=job_id,
                                 receipt_id=r.id,
                                 ocr_raw_text=rule_result.get("ocr_text", ""),
                                 extracted_json=json.dumps(result, ensure_ascii=False),
@@ -835,7 +927,8 @@ def run_ocr(job_id, ids):
                         )
                     if not r.edited_at:
                         for k, v in result.items():
-                            setattr(r, k, v)
+                            if hasattr(type(r), k):
+                                setattr(r, k, v)
                     generate_receipt_draft(
                         db, r, result, source_type="llm" if llm.candidate else "ocr"
                     )
@@ -877,11 +970,34 @@ def analyze(event_id: int, background: BackgroundTasks, db: Session = Depends(se
     return job
 
 
+@app.get("/api/analysis-jobs/{job_id}")
 @app.get("/api/jobs/{job_id}")
 def job_status(job_id: str, db: Session = Depends(session)):
     state = db.get(ProcessingJob, job_id)
     if state:
-        return encode(state)
+        from decimal import Decimal
+
+        records = list(db.scalars(select(Extraction).where(Extraction.processing_job_id == job_id)))
+        token_in = token_out = 0
+        cost = Decimal("0")
+        unpriced = 0
+        for record in records:
+            usage = json.loads(record.usage_json)
+            token_in += usage.get("input_tokens", 0)
+            token_out += usage.get("output_tokens", 0)
+            if record.input_kind != "ocr":
+                if record.estimated_cost_usd is None:
+                    unpriced += 1
+                else:
+                    cost += Decimal(record.estimated_cost_usd)
+        return {
+            **encode(state),
+            "input_tokens": token_in,
+            "output_tokens": token_out,
+            "estimated_cost_usd": None if unpriced else str(cost),
+            "unpriced_count": unpriced,
+            "analysis_error_count": sum(bool(r.error_message) for r in records),
+        }
     if job_id not in JOBS:
         raise HTTPException(
             404, "서버 재시작으로 작업 상태가 초기화되었습니다. 영수증 목록에서 결과를 확인하세요."
@@ -925,6 +1041,9 @@ def link_receipt(event_id: int, data: LinkIn, db: Session = Depends(session)):
     r = get(db, Receipt, data.receipt_id)
     if x.event_id != event_id or r.event_id != event_id:
         raise HTTPException(422, "같은 행사 내에서만 연결할 수 있습니다.")
+    annual_entry = db.scalar(select(AnnualEntry).where(AnnualEntry.expense_id == x.id))
+    if annual_entry and not annual_entry.expense_krw:
+        raise HTTPException(422, "수입 거래에는 지출 영수증을 연결할 수 없습니다.")
     if r.final_amount_krw is None:
         raise HTTPException(422, "영수증 결제금액을 먼저 입력하세요.")
     total = sum(
@@ -978,6 +1097,11 @@ def expense_from_receipt(receipt_id: int, category_id: int, db: Session = Depend
     db.add(x)
     db.flush()
     db.add(Link(expense_id=x.id, receipt_id=r.id, allocated_amount_krw=r.final_amount_krw))
+    e = get(db, Event, r.event_id)
+    if e.scope_type != "event":
+        from .annual_service import sync_generated_entry
+
+        sync_generated_entry(db, e, x)
     touch(db, r.event_id)
     db.commit()
     return encode(x)
@@ -1067,6 +1191,10 @@ def finalize(event_id: int, data: FinalizeIn, db: Session = Depends(session)):
         raise HTTPException(422, "경고를 확인하고 승인 사유를 입력하세요.")
     number = e.latest_final_version + 1
     snap = detail(db, e)
+    if e.scope_type != "event":
+        from .annual_service import annual_snapshot
+
+        snap["annual"] = annual_snapshot(db, e)
     snap.update(
         status=FINAL,
         final_version=number,
@@ -1151,3 +1279,128 @@ def exclude_receipt(receipt_id: int, db: Session = Depends(session)):
     touch(db, r.event_id)
     db.commit()
     return encode(r)
+
+
+@app.get("/api/events/{event_id}/receipts/export-pptx")
+def event_ppt(
+    event_id: int,
+    version: int | None = None,
+    draft: bool = False,
+    include_unverified: bool = False,
+    per_slide: int = 3,
+    db: Session = Depends(session),
+):
+    from .ppt import generate_ppt, MIME
+
+    e = get(db, Event, event_id)
+    if version or (e.latest_final_version and not draft):
+        snap = json.loads(version_row(db, e, version).snapshot_json)
+    elif draft:
+        snap = detail(db, e)
+        snap["receipts"] = [
+            {**encode(r), "stored_path": r.stored_path} for r in rows(db, Receipt, event_id)
+        ]
+    else:
+        raise HTTPException(422, "확정본이 없습니다. 초안 출력 옵션을 선택하세요.")
+    return download(
+        generate_ppt(snap, include_unverified=include_unverified, per_slide=per_slide),
+        MIME,
+        f'{"DRAFT_" if not snap.get("final_version") else ""}{snap["name"]}_영수증증빙자료.pptx',
+    )
+
+
+class ScopeAnalysisRequest(BaseModel):
+    scope_type: Literal["event", "ordinary", "b"]
+    scope_id: int
+
+
+def scope_event(db, scope_type, scope_id):
+    if scope_type == "event":
+        event = get(db, Event, scope_id)
+        if event.scope_type != "event":
+            raise HTTPException(422, "행사비 범위가 아닙니다.")
+        return event
+    from .annual_service import get_book
+
+    book = get_book(db, scope_type, scope_id)
+    return get(db, Event, book.owner_event_id)
+
+
+@app.post("/api/receipts/upload")
+async def shared_upload(
+    scope_type: Literal["event", "ordinary", "b"] = Form(...),
+    scope_id: int = Form(...),
+    file: UploadFile = File(...),
+    confirm_reuse: bool = Form(False),
+    db: Session = Depends(session),
+):
+    event = scope_event(db, scope_type, scope_id)
+    editable(db, event.id)
+    if any(j["event_id"] == event.id and j["status"] == "running" for j in JOBS.values()):
+        raise HTTPException(409, "분석 완료 후 업로드하세요.")
+    return await receipt_upload(event.id, file, db, confirm_reuse)
+
+
+@app.post("/api/analysis-jobs", status_code=202)
+def shared_analyze(
+    data: ScopeAnalysisRequest, background: BackgroundTasks, db: Session = Depends(session)
+):
+    event = scope_event(db, data.scope_type, data.scope_id)
+    editable(db, event.id)
+    return analyze(event.id, background, db)
+
+
+class ScopeLinkRequest(ScopeAnalysisRequest):
+    target_id: int
+    receipt_id: int
+    allocated_amount_krw: int = Field(ge=0, le=10**12, strict=True)
+
+
+@app.post("/api/receipt-links")
+def shared_link(data: ScopeLinkRequest, db: Session = Depends(session)):
+    event = scope_event(db, data.scope_type, data.scope_id)
+    editable(db, event.id)
+    if any(j["event_id"] == event.id and j["status"] == "running" for j in JOBS.values()):
+        raise HTTPException(409, "분석 완료 후 연결하세요.")
+    target = data.target_id
+    if data.scope_type != "event":
+        entry = get(db, AnnualEntry, target)
+        if entry.book_id != data.scope_id:
+            raise HTTPException(422, "다른 장부의 거래입니다.")
+        target = entry.expense_id
+    return link_receipt(
+        event.id,
+        LinkIn(
+            expense_id=target,
+            receipt_id=data.receipt_id,
+            allocated_amount_krw=data.allocated_amount_krw,
+        ),
+        db,
+    )
+
+
+@app.post("/api/scopes/{scope_type}/{scope_id}/confirm")
+def shared_confirm(
+    scope_type: Literal["event", "ordinary", "b"],
+    scope_id: int,
+    data: FinalizeIn,
+    db: Session = Depends(session),
+):
+    event = scope_event(db, scope_type, scope_id)
+    editable(db, event.id)
+    return finalize(event.id, data, db)
+
+
+@app.post("/api/scopes/{scope_type}/{scope_id}/revise")
+def shared_revise(
+    scope_type: Literal["event", "ordinary", "b"],
+    scope_id: int,
+    data: RevisionIn,
+    db: Session = Depends(session),
+):
+    return reopen(scope_event(db, scope_type, scope_id).id, data, db)
+
+
+from .annual_api import router as annual_router
+
+app.include_router(annual_router)

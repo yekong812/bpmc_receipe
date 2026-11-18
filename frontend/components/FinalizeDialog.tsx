@@ -13,10 +13,12 @@ export default function FinalizeDialog({
   event,
   onClose,
   onDone,
+  countLabel = "지출",
 }: {
   event: EventData;
   onClose: () => void;
   onDone: () => Promise<void>;
+  countLabel?: string;
 }) {
   const [result, setResult] = useState<Check | null>(null),
     [reason, setReason] = useState(""),
@@ -34,11 +36,21 @@ export default function FinalizeDialog({
         확정하면 현재 데이터를 불변 버전으로 보관하고 편집을 잠급니다. 변경은
         수정 재오픈을 통해 진행합니다.
       </p>
+      <p className="small muted">
+        확정 대상: <strong>{event.name}</strong>
+      </p>
+      {!result && !error && (
+        <p className="muted" role="status">
+          확정 조건을 확인하는 중입니다…
+        </p>
+      )}
       {result && (
         <>
           <div className="preview-summary">
-            <strong>지출 {result.expense_count}건</strong>
-            <strong>₩ {won(result.total_krw)}</strong>
+            <strong>
+              {countLabel} {result.expense_count}건
+            </strong>
+            <strong>지출 합계 ₩ {won(result.total_krw)}</strong>
           </div>
           {!!result.errors.length && (
             <div className="alert error">

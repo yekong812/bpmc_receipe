@@ -23,6 +23,7 @@ export default function VersionHistory({
   event: EventData;
   action: (fn: () => Promise<void>) => Promise<void>;
 }) {
+  const [includeUnknown, setIncludeUnknown] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]),
     [changes, setChanges] = useState<Change[]>([]),
     [error, setError] = useState("");
@@ -45,6 +46,15 @@ export default function VersionHistory({
         이전 확정본을 출력할 수 있습니다.
       </p>
       {error && <p className="error-text">{error}</p>}
+      <label className="check-label small">
+        <input
+          aria-label="이력 PPT 미확인 영수증 포함"
+          type="checkbox"
+          checked={includeUnknown}
+          onChange={(e) => setIncludeUnknown(e.target.checked)}
+        />
+        이력 PPT에 미확인 영수증 포함
+      </label>
       <div className="table-scroll">
         <table>
           <thead>
@@ -94,6 +104,18 @@ export default function VersionHistory({
                       }
                     >
                       영수증 ZIP
+                    </button>
+                    <button
+                      onClick={() =>
+                        action(() =>
+                          download(
+                            `/events/${event.id}/receipts/export-pptx?version=${v.version_no}&include_unverified=${includeUnknown}`,
+                            `${event.name}_v${v.version_no}_영수증증빙자료.pptx`,
+                          ),
+                        )
+                      }
+                    >
+                      PPTX
                     </button>
                   </div>
                 </td>

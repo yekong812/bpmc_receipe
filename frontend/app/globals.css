@@ -1230,3 +1230,256 @@ fieldset:disabled textarea {
     font-size: 11px;
   }
 }
+/* v4: shared navigation and annual books */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 70px;
+}
+.sidebar {
+  position: fixed;
+  top: 70px;
+  left: 0;
+  bottom: 0;
+  width: 180px;
+  background: #fff;
+  border-right: 1px solid var(--line);
+  padding: 28px 18px;
+  z-index: 9;
+}
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 7px;
+  text-decoration: none;
+  color: #788873;
+  font-weight: 500;
+}
+.sidebar nav a.active {
+  background: #eaf2e5;
+  color: #315d32;
+  font-weight: 700;
+}
+.sidebar nav a:hover {
+  background: #f3f7ed;
+}
+.sidebar-note {
+  position: absolute;
+  bottom: 20px;
+  font-size: 10px;
+  color: #a0ab98;
+  line-height: 1.9;
+}
+.app-content {
+  margin-left: 180px;
+  min-width: 0;
+}
+.annual-workspace {
+  padding-left: 3vw;
+  padding-right: 3vw;
+}
+.annual-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 26px 8px;
+  align-items: center;
+}
+.annual-heading h2 {
+  margin-bottom: 8px;
+}
+.annual-heading .badge {
+  margin-left: 12px;
+}
+.annual-content {
+  padding: 24px 26px;
+}
+.export-toolbar {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.export-toolbar label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.annual-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+.annual-table {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  max-height: 65vh;
+}
+.annual-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.annual-table td {
+  padding: 10px 8px;
+}
+.annual-table input:not([type="checkbox"]),
+.annual-table select {
+  width: 100%;
+  font-size: 12px;
+  min-width: 95px;
+  border-color: transparent;
+  background: transparent;
+  padding: 7px 5px;
+}
+.annual-table input:hover,
+.annual-table select:hover {
+  border-color: #d4e0cb;
+}
+.annual-entry-table {
+  min-width: 850px;
+}
+.annual-entry-table td:has(input[aria-label$="거래 내용"]) {
+  min-width: 230px;
+}
+.annual-entry-table input[type="number"] {
+  min-width: 120px;
+}
+.annual-entry-table td small {
+  display: block;
+  font-size: 10px;
+}
+.sum-row td,
+.sum-row th {
+  background: #edf4e5;
+  font-weight: 700;
+}
+.subtotal-row td,
+.subtotal-row th {
+  background: #f6f8f1;
+  color: #7c8c6d;
+}
+.hierarchy-manager {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 14px;
+  margin: 18px 0;
+}
+.hierarchy-manager .order-input {
+  width: 65px;
+}
+.budget-create {
+  margin-bottom: 14px;
+}
+.ledger-filters {
+  padding: 0 0 18px;
+}
+.entry-detail {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: #f4f7ee;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 17px;
+  margin-top: 18px;
+  font-size: 12px;
+}
+.entry-detail label:not(.check-label) {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.entry-detail .entry-note {
+  flex: 1;
+  min-width: 250px;
+}
+.entry-note input {
+  flex: 1;
+}
+@media (max-width: 1000px) {
+  .sidebar {
+    width: 140px;
+    padding: 24px 12px;
+  }
+  .app-content {
+    margin-left: 140px;
+  }
+  .annual-heading,
+  .annual-content {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .annual-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+}
+@media (max-width: 700px) {
+  .site-header {
+    height: 62px;
+  }
+  .sidebar {
+    position: sticky;
+    top: 62px;
+    bottom: auto;
+    width: 100%;
+    padding: 7px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .sidebar > .eyebrow,
+  .sidebar-note {
+    display: none;
+  }
+  .sidebar nav {
+    flex-direction: row;
+    gap: 10px;
+  }
+  .sidebar nav a {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+  .app-content {
+    margin-left: 0;
+  }
+  .annual-workspace {
+    padding: 20px 16px;
+  }
+  .annual-content {
+    padding: 16px;
+  }
+  .annual-heading {
+    padding: 18px 16px 4px;
+  }
+  .annual-heading p {
+    font-size: 10px;
+  }
+  .annual-footer {
+    padding: 12px 16px;
+  }
+  .annual-footer .actions {
+    justify-content: flex-end;
+  }
+  .export-toolbar label {
+    font-size: 10px;
+  }
+  .export-toolbar input[type="date"] {
+    max-width: 135px;
+  }
+  .entry-detail {
+    gap: 12px;
+  }
+  .tabs {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

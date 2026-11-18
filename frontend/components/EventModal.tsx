@@ -38,7 +38,8 @@ export default function EventModal({
     [selected, setSelected] = useState<number[]>([]),
     [finalizing, setFinalizing] = useState(false),
     [focusedExpense, setFocusedExpense] = useState<number | null>(null),
-    [childDirty, setChildDirty] = useState(false);
+    [childDirty, setChildDirty] = useState(false),
+    [includeUnknown, setIncludeUnknown] = useState(false);
   const locked = event.status === "최종 확정";
   const expenseDirty = JSON.stringify(draft) !== JSON.stringify(event.expenses);
   const dirty = expenseDirty || childDirty;
@@ -232,6 +233,29 @@ export default function EventModal({
                 >
                   ↧ Excel 내보내기
                 </button>
+                <label className="check-label small">
+                  <input
+                    type="checkbox"
+                    checked={includeUnknown}
+                    onChange={(e) => setIncludeUnknown(e.target.checked)}
+                  />
+                  PPT 미확인 포함
+                </label>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    guard(() =>
+                      action(() =>
+                        download(
+                          `/events/${event.id}/receipts/export-pptx?${event.latest_final_version ? "" : "draft=true&"}include_unverified=${includeUnknown}`,
+                          `${event.latest_final_version ? "" : "DRAFT_"}${event.name}_영수증증빙자료.pptx`,
+                        ),
+                      ),
+                    )
+                  }
+                >
+                  ↧ PPTX 내보내기
+                </button>
                 <button
                   disabled={busy}
                   onClick={() => guard(() => setTab("receipts"))}
@@ -395,7 +419,7 @@ export default function EventModal({
                               {links
                                 .map(
                                   (l) =>
-                                    `#${event.receipts.findIndex((r) => r.id === l.receipt_id) + 1}`,
+                                    `#${event.receipts.find((r) => r.id === l.receipt_id)?.receipt_number || event.receipts.findIndex((r) => r.id === l.receipt_id) + 1}`,
                                 )
                                 .join(", ") || (
                                 <span className="muted">미연결</span>

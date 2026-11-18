@@ -9,6 +9,9 @@ export default function ReceiptManager({
   busy,
   inform,
   onDirtyChange,
+  hideCategories = false,
+  hideExports = false,
+  categoryNames,
 }: {
   event: EventData;
   refresh: () => Promise<void>;
@@ -16,6 +19,9 @@ export default function ReceiptManager({
   busy: boolean;
   inform: (s: string) => void;
   onDirtyChange: (dirty: boolean) => void;
+  hideCategories?: boolean;
+  hideExports?: boolean;
+  categoryNames?: Record<number, string>;
 }) {
   const [selected, setSelected] = useState<number | null>(null),
     [editing, setEditing] = useState<Receipt | null>(null),
@@ -45,6 +51,10 @@ export default function ReceiptManager({
       status: string;
       processed: number;
       total: number;
+      input_tokens?: number;
+      output_tokens?: number;
+      estimated_cost_usd?: string | null;
+      analysis_error_count?: number;
     } | null>(null);
   const [llm, setLlm] = useState<{
     enabled: boolean;
@@ -58,6 +68,7 @@ export default function ReceiptManager({
       .then((h) => setLlm(h.llm))
       .catch(() => {});
   }, []);
+  const [includeUnknown, setIncludeUnknown] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const pending =
     !!editing &&
@@ -113,6 +124,12 @@ export default function ReceiptManager({
     setExpense("");
     setAllocated(String(r.final_amount_krw ?? ""));
   }
+  useEffect(() => {
+    if (hideCategories && !newCat) {
+      const c = event.categories.find((c) => c.is_active);
+      if (c) setNewCat(String(c.id));
+    }
+  }, [hideCategories, event.categories, newCat]);
   const links = event.links.filter((l) => l.receipt_id === selected);
   return (
     <div>
@@ -129,17 +146,35 @@ export default function ReceiptManager({
             hidden
             ref={input}
             type="file"
-            accept=".zip"
+            accept=".zip,.jpg,.jpeg,.png,.webp"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f)
                 action(async () => {
                   const d = new FormData();
                   d.append("file", f);
-                  const r = await api<{
-                    uploaded_count: number;
-                    duplicate_count: number;
-                  }>(`/events/${event.id}/receipts/upload`, "POST", d);
+                  let r: { uploaded_count: number; duplicate_count: number };
+                  try {
+                    r = await api(
+                      `/events/${event.id}/receipts/upload`,
+                      "POST",
+                      d,
+                    );
+                  } catch (error) {
+                    if (
+                      (error as Error).message.includes("다른 장부") &&
+                      confirm(
+                        "다른 장부·행사에 같은 영수증이 있습니다. 중복 반영을 승인하고 이 장부에도 업로드할까요?",
+                      )
+                    ) {
+                      d.append("confirm_reuse", "true");
+                      r = await api(
+                        `/events/${event.id}/receipts/upload`,
+                        "POST",
+                        d,
+                      );
+                    } else throw error;
+                  }
                   await refresh();
                   inform(
                     `${r.uploaded_count}장 업로드 · 중복 ${r.duplicate_count}장 제외`,
@@ -169,25 +204,65 @@ export default function ReceiptManager({
               : "◎ 영수증 분석 시작"}
           </button>
         </div>
-        <button
-          disabled={analyzing || !event.receipts.length}
-          onClick={() =>
-            action(() =>
-              download(
-                `/events/${event.id}/receipts/export-zip${event.latest_final_version ? "" : "?draft=true"}`,
-                `${event.latest_final_version ? "" : "DRAFT_"}${event.name}_영수증.zip`,
-              ),
-            )
-          }
-        >
-          ↧ 정리된 ZIP 다운로드
-        </button>
+        {!hideExports && (
+          <div className="actions wrap">
+            <label className="check-label small">
+              <input
+                type="checkbox"
+                checked={includeUnknown}
+                onChange={(e) => setIncludeUnknown(e.target.checked)}
+              />
+              PPT 미확인 포함
+            </label>
+            <button
+              disabled={
+                (busy && !event.latest_final_version) ||
+                analyzing ||
+                !event.receipts.length
+              }
+              onClick={() =>
+                action(() =>
+                  download(
+                    `/events/${event.id}/receipts/export-pptx?${event.latest_final_version ? "" : "draft=true&"}include_unverified=${includeUnknown}`,
+                    `${event.latest_final_version ? "" : "DRAFT_"}${event.name}_영수증증빙자료.pptx`,
+                  ),
+                )
+              }
+            >
+              ↧ PPTX 다운로드
+            </button>
+            <button
+              disabled={analyzing || !event.receipts.length}
+              onClick={() =>
+                action(() =>
+                  download(
+                    `/events/${event.id}/receipts/export-zip${event.latest_final_version ? "" : "?draft=true"}`,
+                    `${event.latest_final_version ? "" : "DRAFT_"}${event.name}_영수증.zip`,
+                  ),
+                )
+              }
+            >
+              ↧ 정리된 ZIP 다운로드
+            </button>
+          </div>
+        )}
       </div>
       <p className="muted small">
-        JPG·PNG·WebP / ZIP 최대 50MB, 200장 · 날짜·금액을 확인하고 영수증을
-        연결하세요. 분석 후 지출 초안을 자동 생성하며 최종 확정은 사용자만 할 수
-        있습니다.
+        JPG·PNG·WebP / ZIP 최대 50MB, 200장 · 개별 이미지 업로드 가능 ·
+        날짜·금액을 확인하고 영수증을 연결하세요. 분석 후 지출 초안을 자동
+        생성하며 최종 확정은 사용자만 할 수 있습니다.
       </p>
+      {job && job.status !== "running" && (
+        <p className="small muted">
+          분석 작업 {job.status === "completed" ? "완료" : job.status} · 입력{" "}
+          {job.input_tokens ?? 0} / 출력 {job.output_tokens ?? 0} 토큰 · 추정
+          비용{" "}
+          {job.estimated_cost_usd != null
+            ? `$${job.estimated_cost_usd}`
+            : "미산정"}{" "}
+          · 분석 오류 {job.analysis_error_count ?? 0}건
+        </p>
+      )}
       <div className="table-scroll">
         <table>
           <thead>
@@ -214,7 +289,7 @@ export default function ReceiptManager({
                   if (e.key === "Enter") select(r);
                 }}
               >
-                <td>{i + 1}</td>
+                <td>{r.receipt_number || i + 1}</td>
                 <td>
                   <strong>{r.original_name}</strong>
                 </td>
@@ -584,20 +659,22 @@ export default function ReceiptManager({
                 </button>
               </div>
               <div className="actions wrap">
-                <select
-                  aria-label="새 지출 항목"
-                  value={newCat}
-                  onChange={(e) => setNewCat(e.target.value)}
-                >
-                  <option value="">신규 지출 항목 선택</option>
-                  {event.categories
-                    .filter((c) => c.is_active)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
+                {!hideCategories && (
+                  <select
+                    aria-label="새 지출 항목"
+                    value={newCat}
+                    onChange={(e) => setNewCat(e.target.value)}
+                  >
+                    <option value="">신규 지출 항목 선택</option>
+                    {event.categories
+                      .filter((c) => c.is_active)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {categoryNames?.[c.id] || c.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
                 <button
                   disabled={busy || !newCat || !!links.length}
                   onClick={() =>

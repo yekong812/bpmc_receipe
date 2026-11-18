@@ -174,7 +174,7 @@ def export_excel(event, categories, expenses, receipts, links):
     for col, name in enumerate(HEADERS, 1):
         ws.cell(5, col, name)
     catmap = {c.id: c for c in categories}
-    receiptmap = {r.id: i + 1 for i, r in enumerate(receipts)}
+    receiptmap = {r.id: getattr(r, "receipt_number", None) or i + 1 for i, r in enumerate(receipts)}
     for i, e in enumerate(expenses, 6):
         attached = [l for l in links if l.expense_id == e.id]
         values = [

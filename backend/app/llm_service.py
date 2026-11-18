@@ -18,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class ReceiptFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    suggested_category_id: int | None = Field(default=None, strict=True)
+    suggested_budget_item_id: int | None = Field(default=None, strict=True)
     transaction_date: str | None
     transaction_time: str | None
     merchant: str = Field(max_length=200)
@@ -58,7 +60,7 @@ class Settings:
             enabled=os.getenv("RECEIPT_LLM_ENABLED", "false").lower() in ("true", "1", "yes"),
             key=os.getenv("OPENAI_API_KEY", "").strip(),
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip(),
-            mode=os.getenv("RECEIPT_LLM_MODE", "auto").lower().strip(),
+            mode=os.getenv("RECEIPT_LLM_MODE", "vision").lower().strip(),
             allow_images=os.getenv("RECEIPT_LLM_ALLOW_IMAGES", "false").lower()
             in ("true", "1", "yes"),
             timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60")),
@@ -128,7 +130,7 @@ Use a concise Korean description of purchased goods; reasons must be in Korean.
 Never include card/account numbers or personal contact information in returned fields."""
 
 
-def extract_receipt(path, ocr_text, rule_result, *, settings=None, transport=None):
+def extract_receipt(path, ocr_text, rule_result, categories=None, *, settings=None, transport=None):
     """Return candidate and usage, leaving all persistence/user approval to the caller."""
     result = LLMResult()
     try:
@@ -149,7 +151,8 @@ def extract_receipt(path, ocr_text, rule_result, *, settings=None, transport=Non
         or not rule_result.get("merchant")
         or bool(rule_result.get("review_reason"))
     )
-    if cfg.mode != "vision" and not weak:
+    categories = categories or []
+    if cfg.mode != "vision" and not weak and not categories:
         return result
     if not cfg.key:
         result.error = "LLM API 키가 없습니다. 서버의 OPENAI_API_KEY를 설정하세요."
@@ -189,11 +192,25 @@ def extract_receipt(path, ocr_text, rule_result, *, settings=None, transport=Non
         except Exception:
             result.error = "LLM에 전달할 영수증 이미지를 준비하지 못했습니다."
             return result
+    if categories:
+        content[0][
+            "text"
+        ] += "\n사용 가능한 항목(반드시 이 목록에서만 선택, 불명확하면 null): " + json.dumps(
+            categories, ensure_ascii=False
+        )
+    else:
+        content[0][
+            "text"
+        ] += "\n이 장부에는 분류 항목이 없습니다. suggested_category_id와 suggested_budget_item_id는 null로 반환하세요."
     schema = ReceiptFields.model_json_schema()
+    schema["required"] = list(schema["properties"])
+    for prop in schema["properties"].values():
+        prop.pop("default", None)
     payload = {
         "model": cfg.model,
         "store": False,
-        "instructions": INSTRUCTIONS,
+        "instructions": INSTRUCTIONS
+        + "\nClassify into the provided category list. suggested_category_id uses id; suggested_budget_item_id uses budget_item_id. Never invent category IDs.",
         "input": [{"role": "user", "content": content}],
         "max_output_tokens": 1600,
         "text": {
@@ -265,7 +282,32 @@ def extract_receipt(path, ocr_text, rule_result, *, settings=None, transport=Non
             reasons.append("원화 최종 결제금액 미확인")
         if values.is_refund:
             reasons.append("취소·환불 영수증 확인")
+        chosen = next((c for c in categories if c["id"] == values.suggested_category_id), None)
+        if not chosen and values.suggested_budget_item_id is not None:
+            chosen = next(
+                (
+                    c
+                    for c in categories
+                    if c.get("budget_item_id") == values.suggested_budget_item_id
+                ),
+                None,
+            )
+        if (
+            values.suggested_category_id is not None or values.suggested_budget_item_id is not None
+        ) and not chosen:
+            reasons.append("목록 밖 항목 분류 후보 제외")
+        if (
+            chosen
+            and values.suggested_budget_item_id is not None
+            and values.suggested_budget_item_id != chosen.get("budget_item_id")
+        ):
+            chosen = None
+            reasons.append("항목과 예산 분류 후보 충돌")
+        if categories and not chosen:
+            reasons.append("항목 분류 확인 필요")
         result.candidate = {
+            "suggested_category_id": chosen["id"] if chosen else None,
+            "suggested_budget_item_id": chosen.get("budget_item_id") if chosen else None,
             "transaction_at": transaction,
             "merchant": mask_sensitive(values.merchant)[:200],
             "description": mask_sensitive(values.description)[:1000],
@@ -274,6 +316,16 @@ def extract_receipt(path, ocr_text, rule_result, *, settings=None, transport=Non
             "ocr_status": "검토 필요",
             "ocr_text": ocr_text,
         }
+        if not weak and cfg.mode != "vision":
+            # For a complete local OCR result, AI classifies without replacing extracted fields.
+            for key in [
+                "transaction_at",
+                "merchant",
+                "description",
+                "final_amount_krw",
+                "ocr_text",
+            ]:
+                result.candidate[key] = rule_result.get(key)
     except httpx.TimeoutException:
         result.error = "LLM API 응답 시간이 초과되었습니다. 저장된 결과를 확인하고 재시도하세요."
     except httpx.RequestError:

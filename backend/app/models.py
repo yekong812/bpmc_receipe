@@ -12,6 +12,7 @@ class Event(Base):
     __tablename__ = "events"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
+    scope_type: Mapped[str] = mapped_column(default="event")
     event_date: Mapped[str | None]
     latest_final_version: Mapped[int] = mapped_column(default=0)
     start_date: Mapped[str]
@@ -57,6 +58,7 @@ class Receipt(Base):
     __tablename__ = "receipts"
     id: Mapped[int] = mapped_column(primary_key=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
+    receipt_number: Mapped[int | None]
     original_name: Mapped[str]
     stored_path: Mapped[str]
     sha256: Mapped[str]
@@ -112,6 +114,9 @@ class Extraction(Base):
     extracted_json: Mapped[str]
     model_name: Mapped[str] = mapped_column(default="PaddleOCR / rules")
     analyzed_at: Mapped[str] = mapped_column(default=now)
+    processing_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("processing_jobs.id", ondelete="SET NULL")
+    )
     input_kind: Mapped[str] = mapped_column(default="ocr")
     usage_json: Mapped[str] = mapped_column(default="{}")
     estimated_cost_usd: Mapped[str | None]
@@ -139,3 +144,52 @@ class ProcessingJob(Base):
     total: Mapped[int] = mapped_column(default=0)
     error_message: Mapped[str] = mapped_column(default="")
     created_at: Mapped[str] = mapped_column(default=now)
+
+
+class AnnualBook(Base):
+    """Scope discriminant plus unique year; receipts/versions use an FK-owned event scope."""
+
+    __tablename__ = "annual_books"
+    __table_args__ = (UniqueConstraint("kind", "year"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str]
+    year: Mapped[int]
+    owner_event_id: Mapped[int] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), unique=True
+    )
+    created_at: Mapped[str] = mapped_column(default=now)
+
+
+class BudgetItem(Base):
+    __tablename__ = "ordinary_budget_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("annual_books.id", ondelete="CASCADE"))
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("ordinary_budget_items.id"))
+    level: Mapped[int]
+    name: Mapped[str]
+    budget_krw: Mapped[int] = mapped_column(default=0)
+    detail: Mapped[str] = mapped_column(default="")
+    sort_order: Mapped[int] = mapped_column(default=0)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("event_categories.id"))
+    updated_at: Mapped[str] = mapped_column(default=now)
+
+
+class AnnualEntry(Base):
+    __tablename__ = "annual_entries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("annual_books.id", ondelete="CASCADE"))
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expenses.id", ondelete="CASCADE"), unique=True
+    )
+    transaction_date: Mapped[str | None]
+    budget_item_id: Mapped[int | None] = mapped_column(ForeignKey("ordinary_budget_items.id"))
+    description: Mapped[str]
+    income_krw: Mapped[int | None] = mapped_column(default=0)
+    expense_krw: Mapped[int | None] = mapped_column(default=0)
+    entry_type: Mapped[str] = mapped_column(default="expense")
+    review_status: Mapped[str] = mapped_column(default="확인됨")
+    sort_order: Mapped[int] = mapped_column(default=0)
+    note: Mapped[str] = mapped_column(default="")
+    source_type: Mapped[str] = mapped_column(default="manual")
+    updated_at: Mapped[str] = mapped_column(default=now)

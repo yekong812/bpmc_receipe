@@ -74,17 +74,6 @@ export default function Home() {
     );
   return (
     <main>
-      <header className="site-header">
-        <a className="brand" href="/">
-          <span className="brand-icon">▦</span>
-          <b>BPMC</b>
-          <span className="brand-divider" />
-          행사 지출 관리
-        </a>
-        <span className="local-badge">
-          <i /> 개인 작업 공간
-        </span>
-      </header>
       <div className="workspace">
         <div className="breadcrumb">
           워크스페이스 <span>/</span> 행사 목록

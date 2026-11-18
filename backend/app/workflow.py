@@ -41,6 +41,10 @@ def audit(db, event_id, field, old, new, expense_id=None, source="user"):
 
 
 def check(db, e):
+    if e.scope_type != "event":
+        from .annual_service import annual_check
+
+        return annual_check(db, e)
     errors = []
     warnings = []
     xs = list(db.scalars(select(Expense).where(Expense.event_id == e.id)))
@@ -97,6 +101,10 @@ def version_row(db, e, version=None):
 
 
 def snapshot_excel(snapshot):
+    if snapshot.get("annual"):
+        from .annual_excel import export_book
+
+        return export_book(snapshot)
     obj = lambda x: SimpleNamespace(**x)
     e = obj(snapshot)
     e.status = f'최종 확정 v{snapshot["final_version"]}'

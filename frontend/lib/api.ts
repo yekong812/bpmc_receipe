@@ -22,6 +22,7 @@ export type Expense = {
 export type Receipt = {
   id: number;
   original_name: string;
+  receipt_number?: number | null;
   transaction_at: string | null;
   merchant: string;
   description: string;
