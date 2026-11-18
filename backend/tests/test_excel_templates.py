@@ -54,3 +54,41 @@ def test_annual_samples_match_each_import_target(client):
         client.get(f"/api/b/books/{b['id']}/excel/import/template?target=budget").status_code == 422
     )
     assert client.get("/api/ordinary/books/999999/excel/import/template").status_code == 404
+
+
+def test_missing_ordinary_classification_imports_as_other(client):
+    from openpyxl import Workbook
+    from backend.tests.test_v4 import detail
+
+    b = book(client)
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["날짜", "항", "목", "내용", "수입", "지출"])
+    ws.append(["2026-01-10", None, None, "미분류 지출", 0, 1000])
+    ws.append(["2026-01-11", "없는 항", "없는 목", "미등록 분류", 0, 2000])
+    ws.append(["2026-01-12", None, None, "미분류 수입", 3000, 0])
+    data = io.BytesIO()
+    wb.save(data)
+    preview = import_preview(client, b, data.getvalue())
+    assert not preview["errors"]
+    assert all(r["temporary_classification"] for r in preview["rows"])
+    assert detail(client, b)["budget"] == []  # preview never mutates budgets
+    url = f"/api/ordinary/books/{b['id']}/excel/import/commit"
+    r = client.post(
+        url, json={"job_id": preview["job_id"], "mode": "append", "accept_warnings": True}
+    )
+    assert r.status_code == 200, r.text
+    saved = detail(client, b)
+    assert len(saved["budget"]) == 3
+    assert all(i["name"] == "기타" for i in saved["budget"])
+    leaf = next(i for i in saved["budget"] if i["level"] == 3)
+    assert all(e["budget_item_id"] == leaf["id"] for e in saved["entries"])
+    assert all(e["review_status"] == "검토 필요" for e in saved["entries"])
+    assert "없는 항 / 없는 목" in saved["entries"][1]["note"]
+    # Reimport reuses the same hierarchy and preserves original valid matches.
+    preview = import_preview(client, b, data.getvalue())
+    r = client.post(
+        url, json={"job_id": preview["job_id"], "mode": "append", "accept_warnings": True}
+    )
+    assert r.status_code == 200, r.text
+    assert len(detail(client, b)["budget"]) == 3

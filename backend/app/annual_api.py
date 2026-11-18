@@ -549,21 +549,31 @@ async def preview_excel(
         leaves = [i for i in budget_rows(db, b) if i.level == 3 and i.is_active]
         allitems = {i.id: i for i in budget_rows(db, b)}
         for r in result["rows"]:
-            if kind == "ordinary" and r["expense_krw"]:
+            if kind == "ordinary":
                 candidates = [
                     i
                     for i in leaves
-                    if i.name == r["budget_name"] and allitems[i.parent_id].name == r["section"]
-                ]
-                if len(candidates) != 1:
-                    result["errors"].append(
-                        {
-                            "row": r["source_row"],
-                            "message": "항·목이 없거나 중복됩니다. 해당 연도 예산 항목을 먼저 설정하세요.",
-                        }
+                    if i.name == r["budget_name"]
+                    and allitems[i.parent_id].name == r["section"]
+                    and (
+                        not r.get("division")
+                        or allitems[allitems[i.parent_id].parent_id].name == r["division"]
                     )
-                else:
+                ]
+                if len(candidates) == 1:
                     r["budget_item_id"] = candidates[0].id
+                else:
+                    original = " / ".join(
+                        r.get(k) or "(미입력)" for k in ["division", "section", "budget_name"]
+                    )
+                    r.update(
+                        division="기타",
+                        section="기타",
+                        budget_name="기타",
+                        temporary_classification=True,
+                        review_status="검토 필요",
+                        note=f"[임시 분류: 기타] Excel 원본 {r['source_row']}행 · 원본 관/항/목: {original}",
+                    )
             if (
                 r["transaction_date"],
                 r["description"],
@@ -666,6 +676,38 @@ def commit_excel(kind: Kind, book_id: int, data: CommitIn, db: Session = Depends
             if data.mode == "append"
             else []
         )
+        if kind == "ordinary" and any(r.get("temporary_classification") for r in payload["rows"]):
+            # Resolve/create the fallback only when the user commits, never in preview.
+            items = [
+                BudgetIn(**{k: v for k, v in encode(i).items() if k in BudgetIn.model_fields})
+                for i in budget_rows(db, b)
+            ]
+            parent = None
+            for level in [1, 2, 3]:
+                item = next((i for i in items if i.parent_id == parent and i.name == "기타"), None)
+                if item is None:
+                    item = BudgetIn(
+                        id=-level,
+                        parent_id=parent,
+                        level=level,
+                        name="기타",
+                        detail="Excel 미분류 거래 임시 항목",
+                    )
+                    items.append(item)
+                item.is_active = True
+                parent = item.id
+            apply_budget(db, b, BudgetSave(version=event.version, items=items))
+            parent = None
+            for level in [1, 2, 3]:
+                item = next(
+                    i
+                    for i in budget_rows(db, b)
+                    if i.parent_id == parent and i.name == "기타" and i.level == level
+                )
+                parent = item.id
+            for row in payload["rows"]:
+                if row.get("temporary_classification"):
+                    row["budget_item_id"] = parent
         values.extend(
             EntryIn(**{k: v for k, v in r.items() if k in EntryIn.model_fields})
             for r in payload["rows"]

@@ -178,6 +178,7 @@ def parse_workbook(data, book, target="entries", mapping=None, sheet_name=""):
                 )
                 row = {
                     **valid.model_dump(mode="json"),
+                    "division": str(value("관") or "").strip(),
                     "section": str(value("항") or "").strip(),
                     "budget_name": str(value("목") or "").strip(),
                     "source_row": n,

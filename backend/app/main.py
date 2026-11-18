@@ -59,7 +59,7 @@ from .schemas import (
     FinalizeIn,
 )
 from .excel import parse_excel, export_excel
-from .receipts import unpack_images, recognize, parse_receipt
+from .receipts import MAX_IMAGE, MAX_ZIP, unpack_images, recognize, parse_receipt
 from .workflow import editable, audit, check, version_row, snapshot_excel, receipt_archive, FINAL
 from .middleware import BodyLimitMiddleware
 from .llm_service import extract_receipt, public_settings, Settings as LLMSettings
@@ -663,11 +663,11 @@ async def receipt_upload(
     confirm_reuse: bool = Form(False),
 ):
     get(db, Event, event_id)
-    data = await read_upload(file, 50 * 1024**2)
+    data = await read_upload(file, MAX_ZIP)
     try:
         if (file.filename or "").lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-            if len(data) > 15 * 1024**2:
-                raise ValueError("이미지 한 장은 15MB까지 지원합니다.")
+            if len(data) > MAX_IMAGE:
+                raise ValueError(f"이미지 한 장은 {MAX_IMAGE // 1024**2}MB까지 지원합니다.")
             wrapped = io.BytesIO()
             with zipfile.ZipFile(wrapped, "w") as z:
                 z.writestr(Path(file.filename).name, data)

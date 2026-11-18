@@ -201,7 +201,15 @@ export default function AnnualExcelImport({
                         ) : (
                           <>
                             <td>{String(r.transaction_date)}</td>
-                            <td>{String(r.description)}</td>
+                            <td>
+                              {String(r.description)}
+                              {r.temporary_classification === true && (
+                                <small className="error-text">
+                                  {" "}
+                                  · 임시 분류: 기타 / 기타 / 기타
+                                </small>
+                              )}
+                            </td>
                             <td>{won(Number(r.income_krw))}</td>
                             <td>{won(Number(r.expense_krw))}</td>
                           </>

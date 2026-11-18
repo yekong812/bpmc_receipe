@@ -296,6 +296,28 @@ def test_zip_security(client, entries):
     assert c.get(f"/api/events/{e['id']}/receipts").json() == []
 
 
+def test_receipt_zip_image_limit(client):
+    endpoint = f"/api/events/{create(client)['id']}/receipts"
+    entries = [("receipts/", b""), ("__MACOSX/._receipt.png", b"metadata")]
+    for i in range(301):
+        raw = io.BytesIO()
+        Image.new("RGB", (30, 40), (i % 256, i // 256, 120)).save(raw, format="PNG")
+        entries.append((f"receipts/{i}.png", raw.getvalue()))
+
+    rejected = client.post(
+        f"{endpoint}/upload", files={"file": ("receipts.zip", image_zip(entries))}
+    )
+    assert rejected.status_code == 422
+    assert "최대 300장" in rejected.json()["detail"]
+    assert client.get(endpoint).json() == []
+
+    accepted = client.post(
+        f"{endpoint}/upload", files={"file": ("receipts.zip", image_zip(entries[:-1]))}
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["uploaded_count"] == 300
+
+
 def test_receipt_allocation_duplicate_preview_export_and_cascade(client):
     c = client
     e = create(c)

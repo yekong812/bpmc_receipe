@@ -8,21 +8,23 @@ from datetime import datetime
 from pathlib import PurePosixPath
 from PIL import Image, ImageOps
 
-MAX_ZIP = 50 * 1024**2
-MAX_TOTAL = 200 * 1024**2
-MAX_IMAGE = 15 * 1024**2
+MAX_ZIP = 60 * 1024**2
+MAX_TOTAL = 250 * 1024**2
+MAX_IMAGE = 20 * 1024**2
+MAX_IMAGES = 300
+MAX_ZIP_ENTRIES = 400
 Image.MAX_IMAGE_PIXELS = 40_000_000
 
 
 def unpack_images(data):
     if len(data) > MAX_ZIP:
-        raise ValueError("ZIP은 50MB까지 업로드할 수 있습니다.")
+        raise ValueError(f"ZIP은 {MAX_ZIP // 1024**2}MB까지 업로드할 수 있습니다.")
     images = []
     total = 0
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         files = archive.infolist()
-        if len(files) > 300:
-            raise ValueError("ZIP 내부 항목은 최대 300개입니다.")
+        if len(files) > MAX_ZIP_ENTRIES:
+            raise ValueError(f"ZIP 내부 항목은 최대 {MAX_ZIP_ENTRIES}개입니다.")
         for info in files:
             path = PurePosixPath(info.filename.replace("\\", "/"))
             if (
@@ -39,6 +41,8 @@ def unpack_images(data):
             suffix = path.suffix.lower()
             if suffix not in [".jpg", ".jpeg", ".png", ".webp"]:
                 raise ValueError(f"지원하지 않는 파일: {path.name}")
+            if len(images) >= MAX_IMAGES:
+                raise ValueError(f"영수증은 최대 {MAX_IMAGES}장까지 업로드할 수 있습니다.")
             total += info.file_size
             if (
                 info.file_size > MAX_IMAGE
@@ -55,8 +59,6 @@ def unpack_images(data):
                     actual = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}[im.format]
                     im.verify()
             images.append((path.name, actual, raw, hashlib.sha256(raw).hexdigest()))
-            if len(images) > 200:
-                raise ValueError("영수증은 최대 200장까지 업로드할 수 있습니다.")
     if not images:
         raise ValueError("ZIP에 지원하는 영수증 이미지가 없습니다.")
     return images

@@ -1,5 +1,8 @@
 const config = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  experimental: {
+    middlewareClientMaxBodySize: "64mb",
+  },
   async rewrites() {
     return [
       {

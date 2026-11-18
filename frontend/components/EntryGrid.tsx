@@ -329,6 +329,8 @@ export default function EntryGrid({
                             ? "캐시백"
                             : ""}
                         {r.review_status === "검토 필요" ? " · 검토 필요" : ""}
+                        {r.note.includes("[임시 분류: 기타]") &&
+                          " · 임시 분류: 기타"}
                       </small>
                     </td>
                     <td>

@@ -248,7 +248,8 @@ export default function ReceiptManager({
         )}
       </div>
       <p className="muted small">
-        JPG·PNG·WebP / ZIP 최대 50MB, 200장 · 개별 이미지 업로드 가능 ·
+        JPG·PNG·WebP / ZIP당 최대 300장, 60MB (압축 해제 후 총 250MB) ·
+        이미지 한 장당 최대 20MB · 개별 이미지 업로드 가능 ·
         날짜·금액을 확인하고 영수증을 연결하세요. 분석 후 지출 초안을 자동
         생성하며 최종 확정은 사용자만 할 수 있습니다.
       </p>
