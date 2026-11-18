@@ -1361,8 +1361,25 @@ fieldset:disabled textarea {
 .annual-entry-table td:has(input[aria-label$="거래 내용"]) {
   min-width: 230px;
 }
-.annual-entry-table input[type="number"] {
+.annual-entry-table .won-input {
   min-width: 120px;
+}
+.filters.receipt-filters {
+  padding: 0 0 12px;
+}
+.receipt-filters input[type="number"] {
+  width: 115px;
+}
+.receipt-sort {
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+.receipt-sort span {
+  margin-left: 3px;
 }
 .annual-entry-table td small {
   display: block;

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Book, Entry } from "../lib/annual";
 import { won } from "../lib/api";
+import WonInput from "./WonInput";
+
 export default function EntryGrid({
   book,
   rows,
@@ -336,18 +338,10 @@ export default function EntryGrid({
                       </small>
                     </td>
                     <td>
-                      <input
-                        aria-label={`${i + 1}거래 수입`}
-                        className="numeric"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={r.income_krw ?? ""}
-                        onChange={(e) => {
-                          const n =
-                            e.target.value === ""
-                              ? null
-                              : Number(e.target.value);
+                      <WonInput
+                        label={`${i + 1}거래 수입`}
+                        value={r.income_krw}
+                        onChange={(n) => {
                           update(i, {
                             income_krw: n,
                             ...(n
@@ -365,18 +359,10 @@ export default function EntryGrid({
                       />
                     </td>
                     <td>
-                      <input
-                        aria-label={`${i + 1}거래 지출`}
-                        className="numeric"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={r.expense_krw ?? ""}
-                        onChange={(e) => {
-                          const n =
-                            e.target.value === ""
-                              ? null
-                              : Number(e.target.value);
+                      <WonInput
+                        label={`${i + 1}거래 지출`}
+                        value={r.expense_krw}
+                        onChange={(n) => {
                           update(i, {
                             expense_krw: n,
                             ...(n

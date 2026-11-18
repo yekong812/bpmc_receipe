@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { BudgetItem } from "../lib/annual";
 import { won } from "../lib/api";
+import WonInput from "./WonInput";
 export default function BudgetEditor({
   items,
   setItems,
@@ -279,15 +280,10 @@ function SectionRows({
             />
           </td>
           <td>
-            <input
-              aria-label={`${x.name} 예산`}
-              type="number"
-              min="0"
-              step="1"
+            <WonInput
+              label={`${x.name} 예산`}
               value={x.budget_krw}
-              onChange={(e) =>
-                update(x.id, "budget_krw", Number(e.target.value))
-              }
+              onChange={(value) => update(x.id, "budget_krw", value ?? 0)}
             />
           </td>
           <td>

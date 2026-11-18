@@ -168,7 +168,7 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
     "1",
   );
   await expect(page.getByLabel("팀장운영 예산", { exact: true })).toHaveValue(
-    "10000",
+    "₩ 10,000",
   );
   await page
     .getByLabel("경상비 연도 선택", { exact: true })
@@ -231,8 +231,11 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
     .getByRole("button", { name: "닫기", exact: true })
     .click();
   await page.getByRole("tab", { name: "B 장부", exact: true }).click();
+  await expect(page.getByLabel("1거래 수입", { exact: true })).toHaveValue(
+    "₩ 10,000",
+  );
   await expect(page.getByLabel("2거래 지출", { exact: true })).toHaveValue(
-    "5000",
+    "₩ 5,000",
   );
   await confirmBook(page);
   await expect(page.locator(".stats")).toContainText("5,000");

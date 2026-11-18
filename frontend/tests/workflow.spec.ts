@@ -198,6 +198,35 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await expect(reviewReason).toBeDisabled();
     await expect(reviewReason).toHaveValue("재검토 후 원본과 일치 확인");
     await review.getByRole("button", { name: "닫기", exact: true }).click();
+    const filters = detail.getByRole("group", { name: "영수증 검색" });
+    await filters.getByLabel("거래 시작일").fill("2026-11-08");
+    await filters.getByLabel("거래 종료일").fill("2026-11-08");
+    await filters.getByLabel("최소 금액").fill("5000");
+    await filters.getByLabel("최대 금액").fill("5000");
+    const statusFilter = filters.getByRole("combobox", {
+      name: "상태",
+      exact: true,
+    });
+    await statusFilter.selectOption("확인됨");
+    await expect(filters.getByRole("status")).toHaveText("검색 결과 1건");
+    await filters.getByLabel("거래 종료일").fill("2026-11-07");
+    await expect(receiptRow).toHaveCount(0);
+    await filters.getByLabel("거래 종료일").fill("2026-11-08");
+    await filters.getByLabel("최대 금액").fill("4999");
+    await expect(receiptRow).toHaveCount(0);
+    await filters.getByLabel("최대 금액").fill("5000");
+    await statusFilter.selectOption("검토 필요");
+    await expect(receiptRow).toHaveCount(0);
+    await filters.getByRole("button", { name: "초기화", exact: true }).click();
+    await expect(receiptRow).toBeVisible();
+    const amountHeader = detail.getByRole("columnheader", {
+      name: "최종금액",
+      exact: true,
+    });
+    await amountHeader.getByRole("button").click();
+    await expect(amountHeader).toHaveAttribute("aria-sort", "ascending");
+    await amountHeader.getByRole("button").click();
+    await expect(amountHeader).toHaveAttribute("aria-sort", "descending");
     const [zip] = await Promise.all([
       page.waitForEvent("download"),
       detail.getByRole("button", { name: "↧ 정리된 ZIP 다운로드" }).click(),

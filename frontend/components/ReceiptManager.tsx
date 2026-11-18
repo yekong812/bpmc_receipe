@@ -3,6 +3,31 @@ import { useEffect, useRef, useState } from "react";
 import { api, download, EventData, Receipt, won } from "../lib/api";
 import Dialog from "./Dialog";
 
+const receiptColumns = [
+  ["number", "No."],
+  ["file", "원본파일"],
+  ["date", "거래일시"],
+  ["merchant", "상호 / 내역"],
+  ["amount", "최종금액"],
+  ["expense", "매칭 지출행"],
+  ["status", "상태"],
+] as const;
+type SortColumn = (typeof receiptColumns)[number][0];
+
+const receiptRangeFields = [
+  ["fromDate", "거래 시작일", "date"],
+  ["toDate", "거래 종료일", "date"],
+  ["minAmount", "최소 금액", "number"],
+  ["maxAmount", "최대 금액", "number"],
+] as const;
+const emptyFilters = {
+  fromDate: "",
+  toDate: "",
+  minAmount: "",
+  maxAmount: "",
+  status: "",
+};
+
 export default function ReceiptManager({
   event,
   refresh,
@@ -28,6 +53,11 @@ export default function ReceiptManager({
   reviewTarget?: { id: number; onClose: () => void };
   readOnlyReason?: string;
 }) {
+  const [filters, setFilters] = useState(emptyFilters);
+  const [sort, setSort] = useState<{
+    column: SortColumn;
+    ascending: boolean;
+  } | null>(null);
   const [selected, setSelected] = useState<number | null>(
       reviewTarget?.id ?? null,
     ),
@@ -154,6 +184,58 @@ export default function ReceiptManager({
     }
   }, [hideCategories, event.categories, newCat]);
   const links = event.links.filter((l) => l.receipt_id === selected);
+  const expenseNumbers = new Map(
+    event.expenses.map((expense, i) => [expense.id, i + 1]),
+  );
+  const linkedRows = new Map<number, number[]>();
+  for (const link of event.links) {
+    const number = expenseNumbers.get(link.expense_id);
+    if (number === undefined) continue;
+    const numbers = linkedRows.get(link.receipt_id) ?? [];
+    numbers.push(number);
+    linkedRows.set(link.receipt_id, numbers);
+  }
+  const visibleReceipts = event.receipts
+    .map((receipt, i) => {
+      const expenses = linkedRows.get(receipt.id) ?? [];
+      return {
+        receipt,
+        expenses,
+        number: receipt.receipt_number || i + 1,
+        file: receipt.original_name,
+        date: receipt.transaction_at || null,
+        merchant: receipt.merchant || receipt.description || null,
+        amount: receipt.final_amount_krw,
+        expense: expenses.length ? Math.min(...expenses) : null,
+        status: receipt.ocr_status,
+      };
+    })
+    .filter(({ date, amount, status }) => {
+      const day = date?.slice(0, 10);
+      return (
+        (!filters.fromDate || (day !== undefined && day >= filters.fromDate)) &&
+        (!filters.toDate || (day !== undefined && day <= filters.toDate)) &&
+        (!filters.minAmount ||
+          (amount !== null && amount >= Number(filters.minAmount))) &&
+        (!filters.maxAmount ||
+          (amount !== null && amount <= Number(filters.maxAmount))) &&
+        (!filters.status || status === filters.status)
+      );
+    });
+  if (sort) {
+    visibleReceipts.sort((a, b) => {
+      const left = a[sort.column],
+        right = b[sort.column];
+      if (left === right) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const order =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), "ko", { numeric: true });
+      return sort.ascending ? order : -order;
+    });
+  }
   const manager = !reviewTarget && (
     <div>
       {llm && (
@@ -287,69 +369,141 @@ export default function ReceiptManager({
           · 분석 오류 {job.analysis_error_count ?? 0}건
         </p>
       )}
+      {!!event.receipts.length && (
+        <div
+          className="filters receipt-filters"
+          role="group"
+          aria-label="영수증 검색"
+        >
+          {receiptRangeFields.map(([key, label, type]) => (
+            <label key={key}>
+              {label}
+              <input
+                type={type}
+                min={type === "number" ? 0 : undefined}
+                value={filters[key]}
+                onChange={(e) =>
+                  setFilters({ ...filters, [key]: e.target.value })
+                }
+              />
+            </label>
+          ))}
+          <label>
+            상태
+            <select
+              value={filters.status}
+              onChange={(e) =>
+                setFilters({ ...filters, status: e.target.value })
+              }
+            >
+              <option value="">전체</option>
+              {["대기", "검토 필요", "확인됨", "제외"].map((status) => (
+                <option key={status}>{status}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setFilters(emptyFilters)}
+          >
+            초기화
+          </button>
+          <span className="small muted" role="status">
+            검색 결과 {visibleReceipts.length}건
+          </span>
+        </div>
+      )}
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>No.</th>
-              <th>원본파일</th>
-              <th>거래일시</th>
-              <th>상호 / 내역</th>
-              <th className="numeric">최종금액</th>
-              <th>매칭 지출행</th>
-              <th>상태</th>
+              {receiptColumns.map(([column, label]) => {
+                const active = sort?.column === column;
+                return (
+                  <th
+                    key={column}
+                    scope="col"
+                    className={column === "amount" ? "numeric" : undefined}
+                    aria-sort={
+                      active
+                        ? sort.ascending
+                          ? "ascending"
+                          : "descending"
+                        : undefined
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="receipt-sort"
+                      onClick={() =>
+                        setSort({
+                          column,
+                          ascending: active ? !sort.ascending : true,
+                        })
+                      }
+                    >
+                      {label}{" "}
+                      <span aria-hidden="true">
+                        {active ? (sort.ascending ? "↑" : "↓") : "↕"}
+                      </span>
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {event.receipts.map((r, i) => (
-              <tr
-                tabIndex={0}
-                aria-haspopup="dialog"
-                key={r.id}
-                className={
-                  selected === r.id ? "selected clickable" : "clickable"
-                }
-                onClick={() => select(r)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    select(r);
+            {visibleReceipts.map(
+              ({ receipt: r, number, merchant, expenses }) => (
+                <tr
+                  tabIndex={0}
+                  aria-haspopup="dialog"
+                  key={r.id}
+                  className={
+                    selected === r.id ? "selected clickable" : "clickable"
                   }
-                }}
-              >
-                <td>{r.receipt_number || i + 1}</td>
-                <td>
-                  <strong>{r.original_name}</strong>
-                </td>
-                <td>
-                  {r.transaction_at?.replace("T", " ") || "날짜 확인 필요"}
-                </td>
-                <td>{r.merchant || "—"}</td>
-                <td className="numeric">
-                  {r.final_amount_krw === null
-                    ? "—"
-                    : `₩ ${won(r.final_amount_krw)}`}
-                </td>
-                <td>
-                  {event.links
-                    .filter((l) => l.receipt_id === r.id)
-                    .map(
-                      (l) =>
-                        `#${event.expenses.findIndex((e) => e.id === l.expense_id) + 1}`,
-                    )
-                    .join(", ") || <span className="muted">미연결</span>}
-                </td>
-                <td>
-                  <span
-                    className={`badge ${r.ocr_status === "확인됨" ? "done" : "review"}`}
-                  >
-                    {r.ocr_status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                  onClick={() => select(r)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      select(r);
+                    }
+                  }}
+                >
+                  <td>{number}</td>
+                  <td>
+                    <strong>{r.original_name}</strong>
+                  </td>
+                  <td>
+                    {r.transaction_at?.replace("T", " ") || "날짜 확인 필요"}
+                  </td>
+                  <td>{merchant || "—"}</td>
+                  <td className="numeric">
+                    {r.final_amount_krw === null
+                      ? "—"
+                      : `₩ ${won(r.final_amount_krw)}`}
+                  </td>
+                  <td>
+                    {expenses.map((number) => `#${number}`).join(", ") || (
+                      <span className="muted">미연결</span>
+                    )}
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${r.ocr_status === "확인됨" ? "done" : "review"}`}
+                    >
+                      {r.ocr_status}
+                    </span>
+                  </td>
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
+        {!!event.receipts.length && !visibleReceipts.length && (
+          <div className="empty">조건에 맞는 영수증이 없습니다.</div>
+        )}
         {!event.receipts.length && (
           <div className="empty">
             <span className="empty-icon">▧</span>
