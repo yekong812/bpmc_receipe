@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, download, EventData, won } from "../lib/api";
+import { usePptDownload } from "./AppShell";
 type Version = {
   version_no: number;
   finalized_at: string;
@@ -23,6 +24,7 @@ export default function VersionHistory({
   event: EventData;
   action: (fn: () => Promise<void>) => Promise<void>;
 }) {
+  const downloadPpt = usePptDownload();
   const [includeUnknown, setIncludeUnknown] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]),
     [changes, setChanges] = useState<Change[]>([]),
@@ -108,7 +110,7 @@ export default function VersionHistory({
                     <button
                       onClick={() =>
                         action(() =>
-                          download(
+                          downloadPpt(
                             `/events/${event.id}/receipts/export-pptx?version=${v.version_no}&include_unverified=${includeUnknown}`,
                             `${event.name}_v${v.version_no}_영수증증빙자료.pptx`,
                           ),

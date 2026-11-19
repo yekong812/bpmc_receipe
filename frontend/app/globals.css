@@ -541,6 +541,33 @@ button.review:hover:not(:disabled) {
 .nested .nested {
   z-index: 30;
 }
+.ppt-download-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ppt-download-status p {
+  margin: 0;
+}
+.ppt-download-spinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 2px solid #dfe7dc;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: ppt-download-spin 0.8s linear infinite;
+}
+@keyframes ppt-download-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ppt-download-spinner {
+    animation: none;
+  }
+}
 .dialog {
   background: white;
   border: 1px solid #d9e3d5;

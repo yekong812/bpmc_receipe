@@ -8,7 +8,7 @@ export default function Dialog({
   wide = false,
 }: {
   title: string;
-  onClose: () => void;
+  onClose?: () => void;
   children: React.ReactNode;
   wide?: boolean;
 }) {
@@ -18,15 +18,16 @@ export default function Dialog({
   useEffect(() => {
     const old = document.activeElement as HTMLElement;
     const root = ref.current;
-    root
-      ?.querySelector<HTMLElement>("[autofocus],input,button,select")
-      ?.focus();
+    (
+      root?.querySelector<HTMLElement>("[autofocus],input,button,select") ??
+      root
+    )?.focus();
     function keys(e: KeyboardEvent) {
       const dialogs = document.querySelectorAll("[role=dialog]");
       if (dialogs[dialogs.length - 1] !== root) return;
       if (e.key === "Escape") {
         e.stopImmediatePropagation();
-        closeRef.current();
+        closeRef.current?.();
       }
       if (e.key === "Tab" && root) {
         const a = Array.from(
@@ -36,7 +37,9 @@ export default function Dialog({
         ).filter((x) => x.getClientRects().length);
         const first = a[0],
           last = a[a.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
+        if (!first) {
+          e.preventDefault();
+        } else if (e.shiftKey && document.activeElement === first) {
           e.preventDefault();
           last?.focus();
         } else if (!e.shiftKey && document.activeElement === last) {
@@ -57,14 +60,17 @@ export default function Dialog({
         ref={ref}
         className={`dialog ${wide ? "wide" : ""}`}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-label={title}
       >
         <div className="dialog-heading">
           <h2>{title}</h2>
-          <button aria-label="닫기" onClick={onClose}>
-            ×
-          </button>
+          {onClose && (
+            <button aria-label="닫기" onClick={onClose}>
+              ×
+            </button>
+          )}
         </div>
         {children}
       </div>

@@ -9,7 +9,7 @@ import {
   entryPayload,
 } from "../lib/annual";
 import { statusClass } from "../lib/ui";
-import { useWorkspaceDirty } from "./AppShell";
+import { usePptDownload, useWorkspaceDirty } from "./AppShell";
 import Dialog from "./Dialog";
 import SaveNotice from "./SaveNotice";
 import BudgetEditor from "./BudgetEditor";
@@ -22,6 +22,7 @@ import AnnualExcelImport from "./AnnualExcelImport";
 type Tab = "budget" | "entries" | "receipts" | "history";
 export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
   const label = kind === "ordinary" ? "경상비" : "B";
+  const downloadPpt = usePptDownload();
   const [books, setBooks] = useState<Book[]>([]),
     [book, setBook] = useState<Book | null>(null),
     [rows, setRows] = useState<Entry[]>([]),
@@ -153,7 +154,8 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
       type === "excel"
         ? "excel/export"
         : `receipts/export-${type === "pptx" ? "pptx" : "zip"}`;
-    await download(
+    const downloadFile = type === "pptx" ? downloadPpt : download;
+    await downloadFile(
       `/${kind}/books/${book.id}/${path}?${params}`,
       `${book.latest_final_version ? "" : "DRAFT_"}${label}_${book.year}_${from}_${to}.${type === "excel" ? "xlsx" : type}`,
     );

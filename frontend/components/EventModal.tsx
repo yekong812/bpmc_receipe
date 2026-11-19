@@ -5,6 +5,7 @@ import { statusClass } from "../lib/ui";
 type Tab = "expenses" | "receipts" | "categories" | "history";
 
 import Dialog from "./Dialog";
+import { usePptDownload } from "./AppShell";
 import SaveNotice from "./SaveNotice";
 import EventForm from "./EventForm";
 import CategoryManager from "./CategoryManager";
@@ -27,6 +28,7 @@ export default function EventModal({
   inform: (s: string) => void;
   importOnOpen: boolean;
 }) {
+  const downloadPpt = usePptDownload();
   const [event, setEvent] = useState(initial),
     [draft, setDraft] = useState<Expense[]>(initial.expenses),
     [tab, setTab] = useState<Tab>(
@@ -330,7 +332,7 @@ export default function EventModal({
                   onClick={() =>
                     guard(() =>
                       action(() =>
-                        download(
+                        downloadPpt(
                           `/events/${event.id}/receipts/export-pptx?${event.latest_final_version ? "" : "draft=true&"}include_unverified=${includeUnknown}`,
                           `${event.latest_final_version ? "" : "DRAFT_"}${event.name}_영수증증빙자료.pptx`,
                         ),

@@ -2,12 +2,26 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useState } from "react";
+import { download } from "../lib/api";
+import Dialog from "./Dialog";
+
 const DirtyContext = createContext<(dirty: boolean) => void>(() => {});
+const PptDownloadContext = createContext(download);
 export const useWorkspaceDirty = () => useContext(DirtyContext);
+export const usePptDownload = () => useContext(PptDownloadContext);
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname(),
     router = useRouter();
   const [dirty, setDirty] = useState(false);
+  const [pptDownloads, setPptDownloads] = useState(0);
+  async function downloadPpt(path: string, filename: string) {
+    setPptDownloads((count) => count + 1);
+    try {
+      await download(path, filename);
+    } finally {
+      setPptDownloads((count) => count - 1);
+    }
+  }
   const navigate = (event: React.MouseEvent, href: string) => {
     if (dirty) {
       event.preventDefault();
@@ -68,7 +82,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           검토하고, 확정하고, 보관하세요.
         </p>
       </aside>
-      <div className="app-content">{children}</div>
+      <PptDownloadContext.Provider value={downloadPpt}>
+        <div className="app-content">{children}</div>
+      </PptDownloadContext.Provider>
+      {pptDownloads > 0 && (
+        <Dialog title="영수증 PPTX 준비 중">
+          <div className="ppt-download-status" role="status">
+            <span className="ppt-download-spinner" aria-hidden="true" />
+            <p>
+              영수증 이미지를 모아 PPTX 파일을 만들고 있습니다. 잠시만 기다려
+              주세요.
+            </p>
+          </div>
+        </Dialog>
+      )}
     </DirtyContext.Provider>
   );
 }

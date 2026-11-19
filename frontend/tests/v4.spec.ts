@@ -321,10 +321,24 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   ).toBeDisabled();
   await review.getByRole("button", { name: "닫기", exact: true }).click();
   await expect(receiptNumber).toBeFocused();
-  const [ppt] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: "↧ PPTX", exact: true }).click(),
-  ]);
+  let releasePpt = () => {};
+  const pptReady = new Promise<void>((resolve) => {
+    releasePpt = resolve;
+  });
+  await page.route(/\/receipts\/export-pptx(?:\?|$)/, async (route) => {
+    await pptReady;
+    await route.continue();
+  });
+  const pptDownload = page.waitForEvent("download");
+  const loadingPpt = page.getByRole("dialog", { name: "영수증 PPTX 준비 중" });
+  try {
+    await page.getByRole("button", { name: "↧ PPTX", exact: true }).click();
+    await expect(loadingPpt).toBeVisible();
+  } finally {
+    releasePpt();
+  }
+  const ppt = await pptDownload;
+  await expect(loadingPpt).toBeHidden();
   expect(ppt.suggestedFilename()).toMatch(/\.pptx$/);
   const [zip] = await Promise.all([
     page.waitForEvent("download"),

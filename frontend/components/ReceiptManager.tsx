@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, download, EventData, Receipt, won } from "../lib/api";
 import { useSessionFilters } from "../lib/useSessionFilters";
 import Dialog from "./Dialog";
+import { usePptDownload } from "./AppShell";
 
 const receiptColumns = [
   ["number", "No."],
@@ -63,6 +64,7 @@ export default function ReceiptManager({
   reviewTarget?: { id: number; onClose: () => void };
   readOnlyReason?: string;
 }) {
+  const downloadPpt = usePptDownload();
   const [filters, setFilters] = useSessionFilters(
     `receipts:${event.id}:${event.created_at}`,
     emptyFilters,
@@ -398,7 +400,7 @@ export default function ReceiptManager({
               }
               onClick={() =>
                 action(() =>
-                  download(
+                  downloadPpt(
                     `/events/${event.id}/receipts/export-pptx?${event.latest_final_version ? "" : "draft=true&"}include_unverified=${includeUnknown}`,
                     `${event.latest_final_version ? "" : "DRAFT_"}${event.name}_영수증증빙자료.pptx`,
                   ),
