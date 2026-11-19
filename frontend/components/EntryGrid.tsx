@@ -103,12 +103,6 @@ export default function EntryGrid({
           >
             선택 삭제 {selected.length || ""}
           </button>
-          <input
-            aria-label="거래 내용 검색"
-            value={query}
-            placeholder="내용 검색"
-            onChange={(e) => setQuery(e.target.value)}
-          />
         </div>
         <span className="small muted">
           조회 {filtered.length}건 · 수입 ₩ {won(totalIncome)} / 지출 ₩{" "}
@@ -116,6 +110,12 @@ export default function EntryGrid({
         </span>
       </div>
       <div className="filters ledger-filters">
+        <input
+          aria-label="거래 내용 검색"
+          value={query}
+          placeholder="내용 검색"
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <select
           aria-label="거래 월 필터"
           value={month}
