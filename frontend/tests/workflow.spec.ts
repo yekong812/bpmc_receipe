@@ -210,8 +210,8 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     const filters = detail.getByRole("group", { name: "영수증 검색" });
     await filters.getByLabel("거래 시작일").fill("2026-11-08");
     await filters.getByLabel("거래 종료일").fill("2026-11-08");
-    await filters.getByLabel("최소 금액").fill("5000");
-    await filters.getByLabel("최대 금액").fill("5000");
+    const amountFilter = filters.getByLabel("금액", { exact: true });
+    await amountFilter.fill("5000");
     const statusFilter = filters.getByRole("combobox", {
       name: "상태",
       exact: true,
@@ -221,9 +221,11 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await filters.getByLabel("거래 종료일").fill("2026-11-07");
     await expect(receiptRow).toHaveCount(0);
     await filters.getByLabel("거래 종료일").fill("2026-11-08");
-    await filters.getByLabel("최대 금액").fill("4999");
+    await amountFilter.fill("4999");
     await expect(receiptRow).toHaveCount(0);
-    await filters.getByLabel("최대 금액").fill("5000");
+    await amountFilter.fill("5001");
+    await expect(receiptRow).toHaveCount(0);
+    await amountFilter.fill("5000");
     await statusFilter.selectOption("검토 필요");
     await expect(receiptRow).toHaveCount(0);
     await filters.getByRole("button", { name: "초기화", exact: true }).click();

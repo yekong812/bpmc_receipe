@@ -14,17 +14,15 @@ const receiptColumns = [
 ] as const;
 type SortColumn = (typeof receiptColumns)[number][0];
 
-const receiptRangeFields = [
+const receiptFilterFields = [
   ["fromDate", "거래 시작일", "date"],
   ["toDate", "거래 종료일", "date"],
-  ["minAmount", "최소 금액", "number"],
-  ["maxAmount", "최대 금액", "number"],
+  ["amount", "금액", "number"],
 ] as const;
 const emptyFilters = {
   fromDate: "",
   toDate: "",
-  minAmount: "",
-  maxAmount: "",
+  amount: "",
   status: "",
 };
 
@@ -215,10 +213,7 @@ export default function ReceiptManager({
       return (
         (!filters.fromDate || (day !== undefined && day >= filters.fromDate)) &&
         (!filters.toDate || (day !== undefined && day <= filters.toDate)) &&
-        (!filters.minAmount ||
-          (amount !== null && amount >= Number(filters.minAmount))) &&
-        (!filters.maxAmount ||
-          (amount !== null && amount <= Number(filters.maxAmount))) &&
+        (filters.amount === "" || amount === Number(filters.amount)) &&
         (!filters.status || status === filters.status)
       );
     });
@@ -373,7 +368,7 @@ export default function ReceiptManager({
           role="group"
           aria-label="영수증 검색"
         >
-          {receiptRangeFields.map(([key, label, type]) => (
+          {receiptFilterFields.map(([key, label, type]) => (
             <label key={key}>
               {label}
               <input
