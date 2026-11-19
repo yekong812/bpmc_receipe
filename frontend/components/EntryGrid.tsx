@@ -13,7 +13,7 @@ const emptyFilters = {
   reviewFilter: "",
   query: "",
 };
-type SortColumn = "transaction_date" | "income_krw" | "expense_krw";
+type SortColumn = "number" | "transaction_date" | "income_krw" | "expense_krw";
 
 export default function EntryGrid({
   book,
@@ -66,9 +66,9 @@ export default function EntryGrid({
         (!reviewFilter || row.review_status === reviewFilter) &&
         (!query || row.description.toLowerCase().includes(query.toLowerCase())),
     )
-    .sort(({ row: a }, { row: b }) => {
-      const left = a[sort.column],
-        right = b[sort.column];
+    .sort((a, b) => {
+      const left = sort.column === "number" ? a.index : a.row[sort.column],
+        right = sort.column === "number" ? b.index : b.row[sort.column];
       if (left === right) return 0;
       if (left == null) return 1;
       if (right == null) return -1;
@@ -288,7 +288,7 @@ export default function EntryGrid({
                     }
                   />
                 </th>
-                <th scope="col">No.</th>
+                {sortHeader("number", "No.")}
                 {sortHeader("transaction_date", "날짜")}
                 {ordinary && (
                   <>
@@ -329,7 +329,7 @@ export default function EntryGrid({
                         }
                       />
                     </td>
-                    <td>{i + 1}</td>
+                    <td className="center">{i + 1}</td>
                     <td>
                       <input
                         aria-label={`${i + 1}거래 날짜`}
@@ -461,7 +461,7 @@ export default function EntryGrid({
                         }}
                       />
                     </td>
-                    <td>
+                    <td className="center">
                       {links(r).map((l) => {
                         const index = book.owner.receipts.findIndex(
                           (x) => x.id === l.receipt_id,

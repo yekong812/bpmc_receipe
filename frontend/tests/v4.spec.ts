@@ -258,6 +258,10 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   );
   const entryTable = page.locator(".annual-entry-table");
   const topRow = entryTable.locator("tbody tr").first();
+  const numberSort = entryTable.getByRole("button", {
+    name: "No.",
+    exact: true,
+  });
   const dateHeader = entryTable.getByRole("columnheader", {
     name: "날짜",
     exact: true,
@@ -276,6 +280,14 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   await expect(topRow.getByLabel("2거래 지출", { exact: true })).toBeVisible();
   await incomeSort.click();
   await expect(topRow.getByLabel("1거래 수입", { exact: true })).toBeVisible();
+  await numberSort.click();
+  await expect(
+    topRow.getByRole("cell", { name: "1", exact: true }),
+  ).toBeVisible();
+  await numberSort.click();
+  await expect(
+    topRow.getByRole("cell", { name: "2", exact: true }),
+  ).toBeVisible();
   const entrySearch = page.getByLabel("거래 내용 검색", { exact: true });
   await entrySearch.fill("영수증 간식");
   await page
