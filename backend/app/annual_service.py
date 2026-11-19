@@ -53,7 +53,12 @@ def entries(db, book):
         db.scalars(
             select(AnnualEntry)
             .where(AnnualEntry.book_id == book.id)
-            .order_by(AnnualEntry.sort_order, AnnualEntry.id)
+            .order_by(
+                AnnualEntry.transaction_date.is_(None),
+                AnnualEntry.transaction_date,
+                AnnualEntry.sort_order,
+                AnnualEntry.id,
+            )
         )
     )
 

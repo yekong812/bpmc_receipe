@@ -57,7 +57,7 @@ export default function ReceiptManager({
   const [sort, setSort] = useState<{
     column: SortColumn;
     ascending: boolean;
-  } | null>(null);
+  }>({ column: "date", ascending: true });
   const [selected, setSelected] = useState<number | null>(
       reviewTarget?.id ?? null,
     ),
@@ -222,20 +222,18 @@ export default function ReceiptManager({
         (!filters.status || status === filters.status)
       );
     });
-  if (sort) {
-    visibleReceipts.sort((a, b) => {
-      const left = a[sort.column],
-        right = b[sort.column];
-      if (left === right) return 0;
-      if (left === null) return 1;
-      if (right === null) return -1;
-      const order =
-        typeof left === "number" && typeof right === "number"
-          ? left - right
-          : String(left).localeCompare(String(right), "ko", { numeric: true });
-      return sort.ascending ? order : -order;
-    });
-  }
+  visibleReceipts.sort((a, b) => {
+    const left = a[sort.column],
+      right = b[sort.column];
+    if (left === right) return 0;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    const order =
+      typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left).localeCompare(String(right), "ko", { numeric: true });
+    return sort.ascending ? order : -order;
+  });
   const manager = !reviewTarget && (
     <div>
       {llm && (
@@ -419,7 +417,7 @@ export default function ReceiptManager({
           <thead>
             <tr>
               {receiptColumns.map(([column, label]) => {
-                const active = sort?.column === column;
+                const active = sort.column === column;
                 return (
                   <th
                     key={column}

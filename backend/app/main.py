@@ -181,7 +181,11 @@ def get(db, cls, id):
 
 def rows(db, cls, event_id):
     query = select(cls).where(cls.event_id == event_id)
-    if cls in (Category, Expense):
+    if cls is Expense:
+        query = query.order_by(
+            cls.expense_date.is_(None), cls.expense_date, cls.sort_order, cls.id
+        )
+    elif cls is Category:
         query = query.order_by(cls.sort_order, cls.id)
     elif cls is Receipt:
         query = query.order_by(

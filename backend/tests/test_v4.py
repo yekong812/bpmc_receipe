@@ -95,6 +95,23 @@ def test_book_year_kind_isolation_and_unique_year(client):
     assert c.get(f"/api/b/books/{a['id']}").status_code == 404
 
 
+def test_expenses_and_annual_entries_default_to_date_order(client):
+    event = create(client)
+    annual = book(client, "b")
+    dates = ["2026-11-12", None, "2026-11-08", "2026-11-08"]
+    expected = ["거래 2", "거래 3", "거래 0", "거래 1"]
+    for i, day in enumerate(dates):
+        name = f"거래 {i}"
+        add(client, event, expense_date=day, item_name=name)
+        entry(client, annual, transaction_date=day, description=name)
+
+    event_detail = client.get(f"/api/events/{event['id']}").json()
+    assert [x["item_name"] for x in event_detail["expenses"]] == expected
+    annual_detail = detail(client, annual)
+    assert [x["description"] for x in annual_detail["entries"]] == expected
+    assert [x["item_name"] for x in annual_detail["owner"]["expenses"]] == expected
+
+
 def test_budget_constraints_official_spending_and_revision(client):
     c = client
     b = budget(c, book(c))
