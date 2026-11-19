@@ -4,6 +4,7 @@ import zipfile
 from PIL import Image
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.util import Inches, Pt
 from openpyxl import load_workbook
 from backend.tests.test_system import client, create, add, upload, confirm_receipt, image_zip
 
@@ -361,6 +362,11 @@ def test_ppt_twenty_receipts_seven_slides_no_cropping_and_stable_numbers(client)
         for p in pictures:
             assert p.crop_top == 0 and p.crop_bottom == 0 and p.crop_left == 0 and p.crop_right == 0
             assert abs(p.width / p.height - p.image.size[0] / p.image.size[1]) < 0.001
+            assert p.height >= Inches(6)
+            assert p.top + p.height <= Inches(6.75)
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                assert all(p.font.size <= Pt(13) for p in shape.text_frame.paragraphs)
     text = " ".join(s.text for s in prs.slides[0].shapes if s.has_text_frame)
     assert "영수증 #20" in text and "미확정 초안" in text
     captions = " ".join(s.text for s in prs.slides[-1].shapes if s.has_text_frame)
