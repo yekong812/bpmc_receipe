@@ -248,6 +248,18 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   await expect(page.getByLabel("2거래 지출", { exact: true })).toHaveValue(
     "₩ 5,000",
   );
+  const entrySearch = page.getByLabel("거래 내용 검색", { exact: true });
+  await entrySearch.fill("영수증 간식");
+  await page
+    .getByRole("checkbox", { name: "거래 전체 선택", exact: true })
+    .check();
+  await page.getByRole("button", { name: "초기화", exact: true }).click();
+  await expect(
+    page.getByRole("checkbox", { name: "1거래 선택", exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: "2거래 선택", exact: true }),
+  ).toBeChecked();
   await confirmBook(page);
   await expect(page.locator(".stats")).toContainText("5,000");
   const receiptNumber = page.getByRole("link", { name: "#1", exact: true });

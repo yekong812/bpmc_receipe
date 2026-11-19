@@ -69,6 +69,10 @@ export default function EntryGrid({
       (s, { row }) => s + (row.expense_krw || 0),
       0,
     );
+  const allVisibleChecked =
+    filtered.length > 0 &&
+    selected.length === filtered.length &&
+    filtered.every(({ index }) => selected.includes(index));
   return (
     <>
       <div className="toolbar">
@@ -214,9 +218,14 @@ export default function EntryGrid({
                   <input
                     aria-label="거래 전체 선택"
                     type="checkbox"
-                    checked={rows.length > 0 && selected.length === rows.length}
+                    disabled={!filtered.length}
+                    checked={allVisibleChecked}
                     onChange={(e) =>
-                      setSelected(e.target.checked ? rows.map((_, i) => i) : [])
+                      setSelected(
+                        e.target.checked
+                          ? filtered.map(({ index }) => index)
+                          : [],
+                      )
                     }
                   />
                 </th>

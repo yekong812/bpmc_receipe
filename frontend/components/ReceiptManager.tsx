@@ -245,7 +245,9 @@ export default function ReceiptManager({
     .map((r) => r.id);
   const visibleIds = visibleReceipts.map(({ receipt }) => receipt.id);
   const allVisibleChecked =
-    visibleIds.length > 0 && visibleIds.every((id) => checkedIds.includes(id));
+    visibleIds.length > 0 &&
+    checkedIds.length === visibleIds.length &&
+    visibleIds.every((id) => checkedIds.includes(id));
   const manager = !reviewTarget && (
     <div>
       {llm && (
@@ -458,14 +460,9 @@ export default function ReceiptManager({
                   aria-label="현재 검색 결과 영수증 전체 선택"
                   disabled={busy || analyzing || !visibleIds.length}
                   checked={allVisibleChecked}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setCheckedIds((ids) =>
-                      checked
-                        ? [...new Set([...ids, ...visibleIds])]
-                        : ids.filter((id) => !visibleIds.includes(id)),
-                    );
-                  }}
+                  onChange={(e) =>
+                    setCheckedIds(e.target.checked ? visibleIds : [])
+                  }
                 />
               </th>
               {receiptColumns.map(([column, label]) => {
