@@ -102,7 +102,7 @@ export default function EventModal({
           ? tab === "receipts"
             ? "저장하지 않은 영수증 검토값이 있습니다. 검토 팝업에서 ‘검토값 확인’을 누른 뒤 이동해 주세요."
             : "저장하지 않은 항목 변경사항이 있습니다. 수정한 항목의 ‘저장’을 누른 뒤 이동해 주세요."
-          : "저장하지 않은 지출 변경사항이 있습니다. 화면 하단의 ‘임시 저장’을 누른 뒤 이동해 주세요.",
+          : "저장하지 않은 지출 변경사항이 있습니다. 목록 위 오른쪽의 ‘임시 저장’을 누른 뒤 이동해 주세요.",
       );
       return;
     }
@@ -141,9 +141,7 @@ export default function EventModal({
         </div>
       </div>
       <div className="workflow-banner">
-        <span>
-          영수증 업로드 → 지출 초안 작성 → 임시 저장 → 최종 확정
-        </span>
+        <span>영수증 업로드 → 지출 초안 작성 → 임시 저장 → 최종 확정</span>
         <b>
           {event.latest_final_version
             ? `최근 확정본 v${event.latest_final_version}`
@@ -170,6 +168,61 @@ export default function EventModal({
             <span>{n}</span>
           </button>
         ))}
+      </div>
+      <div className="record-actions" role="group" aria-label="저장 및 확정">
+        <span className={dirty ? "warning-text" : "muted"}>
+          {dirty
+            ? childDirty
+              ? "● 현재 탭의 검토값·항목 저장 버튼으로 저장해주세요."
+              : "● 저장하지 않은 변경사항이 있습니다."
+            : "✓ 모든 변경사항이 저장되어 있습니다."}
+        </span>
+        <div className="actions wrap">
+          {locked ? (
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() =>
+                action(async () => {
+                  await api(`/events/${event.id}/reopen`, "POST", {
+                    version: event.version,
+                  });
+                  await refresh();
+                  inform("확정본을 보존하고 재수정 초안을 열었습니다.");
+                })
+              }
+            >
+              수정 재오픈
+            </button>
+          ) : (
+            <>
+              <button
+                disabled={!expenseDirty || childDirty || busy}
+                onClick={() => {
+                  if (confirm("지출 변경사항을 취소할까요?")) {
+                    setDraft(event.expenses);
+                    setSelected([]);
+                  }
+                }}
+              >
+                변경 취소
+              </button>
+              <button
+                disabled={!expenseDirty || childDirty || busy}
+                className="primary"
+                onClick={() => action(save)}
+              >
+                {busy ? "처리 중…" : "임시 저장"}
+              </button>
+              <button
+                disabled={busy || dirty}
+                onClick={() => setFinalizing(true)}
+              >
+                최종 확정
+              </button>
+            </>
+          )}
+        </div>
       </div>
       {error && (
         <div className="alert error" role="alert">
@@ -650,58 +703,7 @@ export default function EventModal({
         {tab === "history" && <VersionHistory event={event} action={action} />}
       </div>
       <footer className="modal-footer">
-        <span className={dirty ? "warning-text" : "muted"}>
-          {dirty
-            ? childDirty
-              ? "● 현재 탭의 검토값·항목 저장 버튼으로 저장해주세요."
-              : "● 저장하지 않은 변경사항이 있습니다."
-            : "✓ 모든 변경사항이 저장되어 있습니다."}
-        </span>
         <div className="actions wrap">
-          {locked ? (
-            <button
-              className="primary"
-              disabled={busy}
-              onClick={() =>
-                action(async () => {
-                  await api(`/events/${event.id}/reopen`, "POST", {
-                    version: event.version,
-                  });
-                  await refresh();
-                  inform("확정본을 보존하고 재수정 초안을 열었습니다.");
-                })
-              }
-            >
-              수정 재오픈
-            </button>
-          ) : (
-            <>
-              <button
-                disabled={!expenseDirty || childDirty || busy}
-                onClick={() => {
-                  if (confirm("지출 변경사항을 취소할까요?")) {
-                    setDraft(event.expenses);
-                    setSelected([]);
-                  }
-                }}
-              >
-                변경 취소
-              </button>
-              <button
-                disabled={!expenseDirty || childDirty || busy}
-                className="primary"
-                onClick={() => action(save)}
-              >
-                {busy ? "처리 중…" : "임시 저장"}
-              </button>
-              <button
-                disabled={busy || dirty}
-                onClick={() => setFinalizing(true)}
-              >
-                최종 확정
-              </button>
-            </>
-          )}
           <button
             disabled={busy}
             onClick={() =>

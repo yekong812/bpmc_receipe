@@ -44,7 +44,7 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
   await detail.getByRole("button", { name: "닫기", exact: true }).click();
   await expect(detail).toBeVisible();
   await detail.getByRole("button", { name: "임시 저장", exact: true }).click();
-  await expect(detail.locator(".modal-footer")).toContainText(
+  await expect(detail.locator(".record-actions")).toContainText(
     "모든 변경사항이 저장",
   );
   await detail.getByRole("tab", { name: /항목 관리/ }).click();
@@ -330,7 +330,7 @@ test("최종 확정 잠금 → 재오픈 → 재확정 → v1/v2 이력", async 
     await detail
       .getByRole("button", { name: "임시 저장", exact: true })
       .click();
-    await expect(detail.locator(".modal-footer")).toContainText(
+    await expect(detail.locator(".record-actions")).toContainText(
       "모든 변경사항이 저장",
     );
     await confirmFinal(2);

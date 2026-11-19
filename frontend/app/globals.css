@@ -766,7 +766,8 @@ tbody tr:nth-child(even) {
   line-height: 1.8;
   margin-bottom: 0;
 }
-.modal-footer {
+.modal-footer,
+.record-actions {
   padding: 17px 26px;
   border-top: 1px solid var(--line);
   display: flex;
@@ -776,8 +777,20 @@ tbody tr:nth-child(even) {
   background: #fcfdfb;
   font-size: 12px;
 }
-.modal-footer button {
+.modal-footer button,
+.record-actions button {
   font-size: 12px;
+}
+.record-actions {
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+.record-actions > .actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.modal-footer > .actions:only-child {
+  margin-left: auto;
 }
 .section-title p {
   font-size: 12px;
@@ -1082,14 +1095,16 @@ pre {
   .detail-body {
     padding: 16px;
   }
-  .modal-footer {
+  .modal-footer,
+  .record-actions {
     padding: 12px 16px;
     flex-wrap: wrap;
   }
   .modal-footer > .actions {
     margin-left: auto;
   }
-  .modal-footer > span {
+  .modal-footer > span,
+  .record-actions > span {
     font-size: 10px;
   }
   .receipt-editor {
@@ -1218,6 +1233,7 @@ fieldset:disabled textarea {
 .detail-top,
 .workflow-banner,
 .tabs,
+.record-actions,
 .modal-footer {
   flex-shrink: 0;
 }
@@ -1323,11 +1339,6 @@ fieldset:disabled textarea {
   display: flex;
   gap: 8px;
   align-items: center;
-}
-.annual-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
 }
 .annual-table {
   border: 1px solid var(--line);
@@ -1492,12 +1503,6 @@ fieldset:disabled textarea {
   }
   .annual-heading p {
     font-size: 10px;
-  }
-  .annual-footer {
-    padding: 12px 16px;
-  }
-  .annual-footer .actions {
-    justify-content: flex-end;
   }
   .export-toolbar label {
     font-size: 10px;

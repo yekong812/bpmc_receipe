@@ -117,7 +117,7 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
       setSaveNotice(
         childDirty
           ? "저장하지 않은 영수증 검토값이 있습니다. 검토 팝업에서 ‘검토값 확인’을 누른 뒤 이동해 주세요."
-          : "저장하지 않은 장부 변경사항이 있습니다. 화면 하단의 ‘임시 저장’을 누른 뒤 이동해 주세요.",
+          : "저장하지 않은 장부 변경사항이 있습니다. 목록 위 오른쪽의 ‘임시 저장’을 누른 뒤 이동해 주세요.",
       );
       return;
     }
@@ -326,6 +326,66 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
                 </button>
               ))}
             </div>
+            <div
+              className="record-actions"
+              role="group"
+              aria-label="저장 및 확정"
+            >
+              <span className={dirty ? "warning-text" : "muted"}>
+                {dirty
+                  ? "● 저장하지 않은 변경사항이 있습니다."
+                  : "✓ 현재 장부가 저장되어 있습니다."}
+              </span>
+              <div className="actions wrap">
+                {locked ? (
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() =>
+                      action(async () => {
+                        await api(`/${kind}/books/${book.id}/reopen`, "POST", {
+                          version: book.version,
+                        });
+                        await refresh();
+                        inform(
+                          "이전 확정본을 유지하고 재수정 초안을 열었습니다.",
+                        );
+                      })
+                    }
+                  >
+                    수정 재오픈
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      disabled={!dirty || busy}
+                      onClick={() => {
+                        if (confirm("저장하지 않은 변경사항을 취소할까요?")) {
+                          install(book);
+                        }
+                      }}
+                    >
+                      변경 취소
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={
+                        (!rowDirty && !budgetDirty) || childDirty || busy
+                      }
+                      onClick={() => action(save)}
+                    >
+                      임시 저장
+                    </button>
+                    <button
+                      disabled={dirty || busy}
+                      onClick={() => setFinalizing(true)}
+                    >
+                      최종 확정
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
             <div className="annual-content">
               <div className="toolbar export-toolbar">
                 <div className="actions wrap">
@@ -457,62 +517,6 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
                 />
               )}
             </div>
-            <footer className="modal-footer annual-footer">
-              <span className={dirty ? "warning-text" : "muted"}>
-                {dirty
-                  ? "● 저장하지 않은 변경사항이 있습니다."
-                  : "✓ 현재 장부가 저장되어 있습니다."}
-              </span>
-              <div className="actions wrap">
-                {locked ? (
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() =>
-                      action(async () => {
-                        await api(`/${kind}/books/${book.id}/reopen`, "POST", {
-                          version: book.version,
-                        });
-                        await refresh();
-                        inform(
-                          "이전 확정본을 유지하고 재수정 초안을 열었습니다.",
-                        );
-                      })
-                    }
-                  >
-                    수정 재오픈
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      disabled={!dirty || busy}
-                      onClick={() => {
-                        if (confirm("저장하지 않은 변경사항을 취소할까요?")) {
-                          install(book);
-                        }
-                      }}
-                    >
-                      변경 취소
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={
-                        (!rowDirty && !budgetDirty) || childDirty || busy
-                      }
-                      onClick={() => action(save)}
-                    >
-                      임시 저장
-                    </button>
-                    <button
-                      disabled={dirty || busy}
-                      onClick={() => setFinalizing(true)}
-                    >
-                      최종 확정
-                    </button>
-                  </>
-                )}
-              </div>
-            </footer>
           </section>
         </>
       )}

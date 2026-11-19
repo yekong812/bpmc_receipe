@@ -70,7 +70,7 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
   await addBudget("3", "팀장운영", "공동체 / 운영비");
   await page.getByLabel("팀장운영 예산", { exact: true }).fill("10000");
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
-  await expect(page.locator(".annual-footer")).toContainText(
+  await expect(page.locator(".record-actions")).toContainText(
     "현재 장부가 저장",
   );
   await page.getByRole("tab", { name: "경상비 장부", exact: true }).click();
@@ -99,7 +99,7 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
     page.getByRole("tab", { name: "경상비 장부", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
-  await expect(page.locator(".annual-footer")).toContainText(
+  await expect(page.locator(".record-actions")).toContainText(
     "현재 장부가 저장",
   );
   const [draftFile] = await Promise.all([
@@ -209,7 +209,7 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
     .getByLabel("선택 거래유형", { exact: true })
     .selectOption("carryover");
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
-  await expect(page.locator(".annual-footer")).toContainText(
+  await expect(page.locator(".record-actions")).toContainText(
     "현재 장부가 저장",
   );
   await page.getByRole("tab", { name: "영수증 관리", exact: true }).click();
@@ -266,7 +266,7 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   ]);
   expect(zip.suggestedFilename()).toMatch(/\.zip$/);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".annual-footer").scrollIntoViewIfNeeded();
+  await page.locator(".record-actions").scrollIntoViewIfNeeded();
   await expect(
     page.getByRole("button", { name: "수정 재오픈", exact: true }),
   ).toBeInViewport();
