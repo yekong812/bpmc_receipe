@@ -517,7 +517,7 @@ export default function ReceiptManager({
                   >
                     <button
                       type="button"
-                      className="receipt-sort"
+                      className="table-sort"
                       onClick={() =>
                         setSort({
                           column,

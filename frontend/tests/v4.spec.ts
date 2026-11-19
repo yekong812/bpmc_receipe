@@ -96,9 +96,7 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
   });
   await entryReviewed.uncheck();
   await page.getByRole("checkbox", { name: "1거래 선택", exact: true }).check();
-  await page
-    .getByRole("button", { name: "일괄 검토", exact: true })
-    .click();
+  await page.getByRole("button", { name: "일괄 검토", exact: true }).click();
   await expect(entryReviewed).toBeChecked();
   await page.getByRole("tab", { name: "영수증 관리", exact: true }).click();
   const saveNotice = page.getByRole("dialog", { name: "저장 안내" });
@@ -258,6 +256,26 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   await expect(page.getByLabel("2거래 지출", { exact: true })).toHaveValue(
     "₩ 5,000",
   );
+  const entryTable = page.locator(".annual-entry-table");
+  const topRow = entryTable.locator("tbody tr").first();
+  const dateHeader = entryTable.getByRole("columnheader", {
+    name: "날짜",
+    exact: true,
+  });
+  await expect(dateHeader).toHaveAttribute("aria-sort", "ascending");
+  await dateHeader.getByRole("button").click();
+  await expect(dateHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(topRow.getByLabel("2거래 지출", { exact: true })).toHaveValue(
+    "₩ 5,000",
+  );
+  const incomeSort = entryTable.getByRole("button", {
+    name: "수입",
+    exact: true,
+  });
+  await incomeSort.click();
+  await expect(topRow.getByLabel("2거래 지출", { exact: true })).toBeVisible();
+  await incomeSort.click();
+  await expect(topRow.getByLabel("1거래 수입", { exact: true })).toBeVisible();
   const entrySearch = page.getByLabel("거래 내용 검색", { exact: true });
   await entrySearch.fill("영수증 간식");
   await page
@@ -272,6 +290,14 @@ test("B 수입·이월·영수증 검토·지출 생성·확정·PPTX ZIP", asyn
   ).toBeChecked();
   await confirmBook(page);
   await expect(page.locator(".stats")).toContainText("5,000");
+  const expenseSort = entryTable.getByRole("button", {
+    name: "지출",
+    exact: true,
+  });
+  await expenseSort.click();
+  await expect(topRow.getByLabel("1거래 수입", { exact: true })).toBeDisabled();
+  await expenseSort.click();
+  await expect(topRow.getByLabel("2거래 지출", { exact: true })).toBeDisabled();
   const receiptNumber = page.getByRole("link", { name: "#1", exact: true });
   await receiptNumber.click();
   const review = page.getByRole("dialog", { name: "영수증 검토" });

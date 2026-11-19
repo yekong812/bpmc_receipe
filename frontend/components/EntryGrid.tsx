@@ -13,6 +13,7 @@ const emptyFilters = {
   reviewFilter: "",
   query: "",
 };
+type SortColumn = "transaction_date" | "income_krw" | "expense_krw";
 
 export default function EntryGrid({
   book,
@@ -33,6 +34,10 @@ export default function EntryGrid({
   );
   const { month, section, leafFilter, receiptFilter, reviewFilter, query } =
     filters;
+  const [sort, setSort] = useState<{ column: SortColumn; ascending: boolean }>({
+    column: "transaction_date",
+    ascending: true,
+  });
   const [selected, setSelected] = useState<number[]>([]),
     [focus, setFocus] = useState<number | null>(null),
     [sections, setSections] = useState<Record<string, string>>({});
@@ -60,7 +65,19 @@ export default function EntryGrid({
             : links(row).length === 0)) &&
         (!reviewFilter || row.review_status === reviewFilter) &&
         (!query || row.description.toLowerCase().includes(query.toLowerCase())),
-    );
+    )
+    .sort(({ row: a }, { row: b }) => {
+      const left = a[sort.column],
+        right = b[sort.column];
+      if (left === right) return 0;
+      if (left == null) return 1;
+      if (right == null) return -1;
+      const order =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right));
+      return sort.ascending ? order : -order;
+    });
   const totalIncome = filtered.reduce(
       (s, { row }) => s + (row.income_krw || 0),
       0,
@@ -73,6 +90,30 @@ export default function EntryGrid({
     filtered.length > 0 &&
     selected.length === filtered.length &&
     filtered.every(({ index }) => selected.includes(index));
+  function sortHeader(column: SortColumn, label: string) {
+    const active = sort.column === column;
+    return (
+      <th
+        scope="col"
+        aria-sort={
+          active ? (sort.ascending ? "ascending" : "descending") : undefined
+        }
+      >
+        <button
+          type="button"
+          className="table-sort"
+          onClick={() =>
+            setSort({ column, ascending: active ? !sort.ascending : true })
+          }
+        >
+          {label}{" "}
+          <span aria-hidden="true">
+            {active ? (sort.ascending ? "↑" : "↓") : "↕"}
+          </span>
+        </button>
+      </th>
+    );
+  }
   return (
     <>
       <div className="toolbar">
@@ -227,7 +268,7 @@ export default function EntryGrid({
           초기화
         </button>
       </div>
-      <fieldset disabled={locked} className="grid-fieldset">
+      <div>
         <div className="table-scroll annual-table">
           <table className="annual-entry-table">
             <thead>
@@ -236,7 +277,7 @@ export default function EntryGrid({
                   <input
                     aria-label="거래 전체 선택"
                     type="checkbox"
-                    disabled={!filtered.length}
+                    disabled={locked || !filtered.length}
                     checked={allVisibleChecked}
                     onChange={(e) =>
                       setSelected(
@@ -248,7 +289,7 @@ export default function EntryGrid({
                   />
                 </th>
                 <th scope="col">No.</th>
-                <th>날짜</th>
+                {sortHeader("transaction_date", "날짜")}
                 {ordinary && (
                   <>
                     <th>항</th>
@@ -256,8 +297,8 @@ export default function EntryGrid({
                   </>
                 )}
                 <th>내용</th>
-                <th className="numeric">수입</th>
-                <th className="numeric">지출</th>
+                {sortHeader("income_krw", "수입")}
+                {sortHeader("expense_krw", "지출")}
                 <th>영수증번호</th>
               </tr>
             </thead>
@@ -276,6 +317,7 @@ export default function EntryGrid({
                     <td>
                       <input
                         aria-label={`${i + 1}거래 선택`}
+                        disabled={locked}
                         type="checkbox"
                         checked={selected.includes(i)}
                         onChange={(e) =>
@@ -291,6 +333,7 @@ export default function EntryGrid({
                     <td>
                       <input
                         aria-label={`${i + 1}거래 날짜`}
+                        disabled={locked}
                         type="date"
                         min={`${book.year}-01-01`}
                         max={`${book.year}-12-31`}
@@ -307,6 +350,7 @@ export default function EntryGrid({
                         <td>
                           <select
                             aria-label={`${i + 1}거래 항`}
+                            disabled={locked}
                             value={chosen}
                             onChange={(e) => {
                               setSections({
@@ -331,6 +375,7 @@ export default function EntryGrid({
                         <td>
                           <select
                             aria-label={`${i + 1}거래 목`}
+                            disabled={locked}
                             value={r.budget_item_id || ""}
                             onChange={(e) =>
                               update(i, {
@@ -360,6 +405,7 @@ export default function EntryGrid({
                     <td>
                       <input
                         aria-label={`${i + 1}거래 내용`}
+                        disabled={locked}
                         maxLength={500}
                         placeholder="거래 내용"
                         value={r.description}
@@ -381,6 +427,7 @@ export default function EntryGrid({
                     <td>
                       <WonInput
                         label={`${i + 1}거래 수입`}
+                        disabled={locked}
                         value={r.income_krw}
                         onChange={(n) => {
                           update(i, {
@@ -402,6 +449,7 @@ export default function EntryGrid({
                     <td>
                       <WonInput
                         label={`${i + 1}거래 지출`}
+                        disabled={locked}
                         value={r.expense_krw}
                         onChange={(n) => {
                           update(i, {
@@ -459,6 +507,7 @@ export default function EntryGrid({
               거래유형
               <select
                 aria-label="선택 거래유형"
+                disabled={locked}
                 value={rows[focus].entry_type}
                 onChange={(e) => {
                   const type = e.target.value as Entry["entry_type"];
@@ -483,6 +532,7 @@ export default function EntryGrid({
             <label className="check-label">
               <input
                 aria-label="선택 거래 검토 완료"
+                disabled={locked}
                 type="checkbox"
                 checked={rows[focus].review_status === "확인됨"}
                 onChange={(e) =>
@@ -497,6 +547,7 @@ export default function EntryGrid({
               영수증 없음/차액 사유
               <input
                 aria-label="선택 거래 메모"
+                disabled={locked}
                 maxLength={2000}
                 placeholder="사유 또는 메모"
                 value={rows[focus].note}
@@ -508,7 +559,7 @@ export default function EntryGrid({
             </span>
           </div>
         )}
-      </fieldset>
+      </div>
     </>
   );
 }

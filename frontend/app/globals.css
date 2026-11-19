@@ -348,6 +348,9 @@ td {
   padding: 17px 15px;
   border-bottom: 1px solid #edf0eb;
 }
+tr > :is(th, td):not(:last-child) {
+  box-shadow: inset -1px 0 #e4ebe1;
+}
 tbody tr:nth-child(even) {
   background: #fcfdfb;
 }
@@ -1397,11 +1400,20 @@ fieldset:disabled textarea {
 .annual-entry-table {
   min-width: 850px;
 }
+.annual-entry-table thead th {
+  text-align: center;
+}
 .annual-entry-table td:has(input[aria-label$="거래 내용"]) {
   min-width: 230px;
 }
 .annual-entry-table .won-input {
   min-width: 120px;
+}
+.annual-entry-table :is(input, select):disabled,
+.entry-detail :is(input, select):disabled {
+  color: #697465;
+  background: #f7f9f4;
+  cursor: default;
 }
 .filters.receipt-filters {
   padding: 0 0 12px;
@@ -1409,7 +1421,7 @@ fieldset:disabled textarea {
 .receipt-filters input[type="number"] {
   width: 115px;
 }
-.receipt-sort {
+.table-sort {
   border: 0;
   padding: 2px 0;
   background: transparent;
@@ -1417,7 +1429,7 @@ fieldset:disabled textarea {
   font: inherit;
   white-space: nowrap;
 }
-.receipt-sort span {
+.table-sort span {
   margin-left: 3px;
 }
 .annual-entry-table td small {
