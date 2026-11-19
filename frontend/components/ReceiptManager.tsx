@@ -14,6 +14,17 @@ const receiptColumns = [
   ["status", "상태"],
 ] as const;
 type SortColumn = (typeof receiptColumns)[number][0];
+type AnalysisJob = {
+  id: string;
+  status: string;
+  processed: number;
+  total: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  estimated_cost_usd?: string | null;
+  analysis_error_count?: number;
+  error_message?: string;
+};
 
 const receiptFilterFields = [
   ["fromDate", "거래 시작일", "date"],
@@ -60,6 +71,9 @@ export default function ReceiptManager({
   const [analysisConfirmation, setAnalysisConfirmation] = useState<
     number[] | null
   >(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisJob | null>(
+    null,
+  );
   const [sort, setSort] = useState<{
     column: SortColumn;
     ascending: boolean;
@@ -93,16 +107,7 @@ export default function ReceiptManager({
       String(editing?.final_amount_krw ?? ""),
     ),
     [newCat, setNewCat] = useState(""),
-    [job, setJob] = useState<{
-      id: string;
-      status: string;
-      processed: number;
-      total: number;
-      input_tokens?: number;
-      output_tokens?: number;
-      estimated_cost_usd?: string | null;
-      analysis_error_count?: number;
-    } | null>(null);
+    [job, setJob] = useState<AnalysisJob | null>(null);
   const [llm, setLlm] = useState<{
     enabled: boolean;
     key_configured: boolean;
@@ -138,20 +143,28 @@ export default function ReceiptManager({
   }, [selected, event]);
   useEffect(() => {
     if (!job || job.status !== "running") return;
+    let active = true;
     const id = setInterval(async () => {
       try {
-        const j = await api<typeof job>(`/jobs/${job.id}`);
+        const j = await api<AnalysisJob>(`/jobs/${job.id}`);
+        if (!active) return;
         setJob(j);
         if (j.status !== "running") {
-          await refresh();
-          inform("분석이 끝났습니다. 영수증별 결과를 검토해주세요.");
+          active = false;
+          clearInterval(id);
+          setAnalysisResult(j);
+          await refresh().catch((e: Error) => inform(e.message));
         }
       } catch (e) {
+        if (!active) return;
         setJob(null);
         inform((e as Error).message);
       }
     }, 1500);
-    return () => clearInterval(id);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, [job?.id, job?.status, refresh, inform]);
   useEffect(() => {
     if (selected === null) return;
@@ -1025,6 +1038,41 @@ export default function ReceiptManager({
                 </div>
               </div>
             </fieldset>
+          </div>
+        </Dialog>
+      )}
+      {analysisResult && (
+        <Dialog
+          title={
+            analysisResult.status === "completed"
+              ? "영수증 분석 완료"
+              : "영수증 분석 중단"
+          }
+          onClose={() => setAnalysisResult(null)}
+        >
+          <p>
+            선택한 영수증 {analysisResult.total}장 중 {analysisResult.processed}
+            장을 처리했습니다.
+          </p>
+          {analysisResult.status !== "completed" ? (
+            <p className="alert warning">
+              {analysisResult.error_message ||
+                "저장된 결과를 확인한 뒤 다시 분석해 주세요."}
+            </p>
+          ) : (
+            <p className="muted">
+              분석 오류 {analysisResult.analysis_error_count ?? 0}건 · 영수증별
+              결과를 확인해 주세요.
+            </p>
+          )}
+          <div className="dialog-actions">
+            <button
+              type="button"
+              className="primary"
+              onClick={() => setAnalysisResult(null)}
+            >
+              확인
+            </button>
           </div>
         </Dialog>
       )}

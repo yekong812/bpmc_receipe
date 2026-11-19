@@ -309,6 +309,14 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       receipt_ids: [receipt.id],
     });
     await expect(detail.getByText(/분석 작업 완료/)).toBeVisible();
+    const completedAnalysis = page.getByRole("dialog", {
+      name: "영수증 분석 완료",
+    });
+    await expect(completedAnalysis).toContainText("1장 중 1장을 처리했습니다");
+    await completedAnalysis
+      .getByRole("button", { name: "확인", exact: true })
+      .click();
+    await expect(completedAnalysis).toBeHidden();
     await analysisSelection.check();
     const deleteSelected = detail.getByRole("button", {
       name: /선택 영수증 삭제/,
