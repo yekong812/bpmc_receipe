@@ -50,6 +50,15 @@ button:disabled {
 .primary:hover:not(:disabled) {
   background: #1c4632;
 }
+.delete-action {
+  background: #a33d34;
+  border-color: #a33d34;
+  color: white;
+}
+.delete-action:hover:not(:disabled) {
+  background: #852f28;
+  border-color: #852f28;
+}
 input,
 select,
 textarea {

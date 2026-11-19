@@ -236,6 +236,7 @@ export default function EventModal({
             <div className="toolbar">
               <div className="actions">
                 <button
+                  className="primary"
                   disabled={locked || !activeCats.length || busy}
                   onClick={() =>
                     setDraft([
@@ -256,6 +257,7 @@ export default function EventModal({
                   ＋ 행 추가
                 </button>
                 <button
+                  className="delete-action"
                   disabled={locked || !selected.length || busy}
                   onClick={() => {
                     if (

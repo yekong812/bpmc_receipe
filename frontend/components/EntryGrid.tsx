@@ -64,6 +64,7 @@ export default function EntryGrid({
       <div className="toolbar">
         <div className="actions wrap">
           <button
+            className="primary"
             disabled={locked}
             onClick={() => {
               setRows([
@@ -86,6 +87,7 @@ export default function EntryGrid({
             ＋ 거래 추가
           </button>
           <button
+            className="delete-action"
             disabled={locked || !selected.length}
             onClick={() => {
               if (
