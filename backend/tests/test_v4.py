@@ -111,6 +111,29 @@ def test_expenses_and_annual_entries_default_to_date_order(client):
     assert [x["item_name"] for x in annual_detail["owner"]["expenses"]] == expected
 
 
+def test_receipt_drafts_reuse_other_budget_and_keep_unknown_fields_empty(client, monkeypatch):
+    from backend.app import main
+
+    monkeypatch.setattr(main, "recognize", lambda _: "")
+    annual = book(client)
+    owner = {"id": annual["owner_event_id"]}
+    images = []
+    for color in ("red", "blue"):
+        raw = io.BytesIO()
+        Image.new("RGB", (30, 40), color).save(raw, format="PNG")
+        images.append((f"{color}.png", raw.getvalue()))
+    upload(client, owner, image_zip(images))
+    response = client.post(f"/api/ordinary/books/{annual['id']}/receipts/analyze")
+    assert response.status_code == 202, response.text
+    result = detail(client, annual)
+    leaf = next(item for item in result["budget"] if item["level"] == 3)
+    assert len(result["budget"]) == 3 and leaf["path"] == "기타 / 기타 / 기타"
+    assert len(result["entries"]) == len(result["owner"]["links"]) == 2
+    for entry in result["entries"]:
+        assert entry["budget_item_id"] == leaf["id"] and entry["description"] == ""
+        assert entry["expense_krw"] is None and entry["review_status"] == "검토 필요"
+
+
 def test_budget_constraints_official_spending_and_revision(client):
     c = client
     b = budget(c, book(c))

@@ -38,6 +38,8 @@ from .annual_service import (
     book_detail,
     annual_snapshot,
     apply_entry,
+    ensure_other_budget_item,
+    sync_budget_category,
     encode,
     LABEL,
 )
@@ -123,18 +125,7 @@ def apply_budget(db, book, data):
             newitems.append(item)
     for item in newitems:
         if item.level == 3:
-            category = (
-                db.get(Category, item.category_id)
-                if item.category_id
-                else Category(event_id=event.id)
-            )
-            category.name = budget_path(item, newitems)[:65] + f" #{item.id}"
-            category.color = "#e4edda"
-            category.sort_order = item.sort_order
-            category.is_active = item.is_active
-            db.add(category)
-            db.flush()
-            item.category_id = category.id
+            sync_budget_category(db, event, item, budget_path(item, newitems))
     for item in sorted((oldmap[i] for i in deleting), key=lambda x: -x.level):
         if item.category_id:
             db.get(Category, item.category_id).is_active = False
@@ -681,37 +672,10 @@ def commit_excel(kind: Kind, book_id: int, data: CommitIn, db: Session = Depends
             else []
         )
         if kind == "ordinary" and any(r.get("temporary_classification") for r in payload["rows"]):
-            # Resolve/create the fallback only when the user commits, never in preview.
-            items = [
-                BudgetIn(**{k: v for k, v in encode(i).items() if k in BudgetIn.model_fields})
-                for i in budget_rows(db, b)
-            ]
-            parent = None
-            for level in [1, 2, 3]:
-                item = next((i for i in items if i.parent_id == parent and i.name == "기타"), None)
-                if item is None:
-                    item = BudgetIn(
-                        id=-level,
-                        parent_id=parent,
-                        level=level,
-                        name="기타",
-                        detail="Excel 미분류 거래 임시 항목",
-                    )
-                    items.append(item)
-                item.is_active = True
-                parent = item.id
-            apply_budget(db, b, BudgetSave(version=event.version, items=items))
-            parent = None
-            for level in [1, 2, 3]:
-                item = next(
-                    i
-                    for i in budget_rows(db, b)
-                    if i.parent_id == parent and i.name == "기타" and i.level == level
-                )
-                parent = item.id
+            fallback = ensure_other_budget_item(db, b, event)
             for row in payload["rows"]:
                 if row.get("temporary_classification"):
-                    row["budget_item_id"] = parent
+                    row["budget_item_id"] = fallback.id
         values.extend(
             EntryIn(**{k: v for k, v in r.items() if k in EntryIn.model_fields})
             for r in payload["rows"]

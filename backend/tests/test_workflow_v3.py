@@ -138,7 +138,7 @@ def test_failed_ocr_draft_keeps_missing_fields_and_blocks_final(client, monkeypa
     assert finalize(c, e, "검토").status_code == 422
 
 
-def test_existing_expense_candidate_does_not_generate_duplicate(client, monkeypatch):
+def test_matching_date_and_amount_do_not_prevent_receipt_draft(client, monkeypatch):
     import backend.app.main as main
 
     monkeypatch.setattr(
@@ -146,11 +146,17 @@ def test_existing_expense_candidate_does_not_generate_duplicate(client, monkeypa
     )
     c = client
     e = create(c)
-    add(c, e)
-    upload(c, e)
+    existing = add(c, e)
+    receipt = upload(c, e)
     assert c.post(f"/api/events/{e['id']}/receipts/analyze").status_code == 202
-    assert len(latest(c, e)["expenses"]) == 1 and not latest(c, e)["links"]
-    assert c.get(f"/api/events/{e['id']}/receipt-suggestions").json()[0]["candidates"]
+    result = latest(c, e)
+    assert len(result["expenses"]) == 2
+    link = result["links"][0]
+    draft = next(x for x in result["expenses"] if x["id"] == link["expense_id"])
+    assert draft["id"] != existing["id"] and link["receipt_id"] == receipt["id"]
+    assert draft["category_id"] == next(
+        x["id"] for x in result["categories"] if x["name"] == "기타"
+    )
 
 
 def test_date_only_receipt_remains_date_only_and_exports_review_folder(client):

@@ -5,7 +5,7 @@ The discriminated annual book and all entry/budget references are validated on e
 import json
 from datetime import date as Date
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import null, select
 from .models import (
     AnnualBook,
     AnnualEntry,
@@ -76,6 +76,49 @@ def budget_path(item, items):
     return " / ".join(parts)
 
 
+def sync_budget_category(db, event, item, path):
+    category = db.get(Category, item.category_id) if item.category_id else None
+    if category is None:
+        category = Category(event_id=event.id)
+        db.add(category)
+    category.name = path[:65] + f" #{item.id}"
+    category.color = "#e4edda"
+    category.sort_order = item.sort_order
+    category.is_active = item.is_active
+    db.flush()
+    item.category_id = category.id
+    return category
+
+
+def ensure_other_budget_item(db, book, event):
+    items = budget_rows(db, book)
+    lookup = {(i.parent_id, i.name): i for i in items}
+    parent = None
+    for level in (1, 2, 3):
+        item = lookup.get((parent, "기타"))
+        if item is None:
+            item = BudgetItem(
+                book_id=book.id,
+                parent_id=parent,
+                level=level,
+                name="기타",
+                detail="미분류 거래 임시 항목",
+            )
+            db.add(item)
+            db.flush()
+            audit(db, event.id, "budget", None, encode(item))
+        elif not item.is_active:
+            before = encode(item)
+            item.is_active = True
+            item.updated_at = now()
+            audit(db, event.id, "budget", before, encode(item))
+        parent = item.id
+    category = db.get(Category, item.category_id) if item.category_id else None
+    if category is None or not category.is_active:
+        sync_budget_category(db, event, item, "기타 / 기타 / 기타")
+    return item
+
+
 def context_categories(db, event):
     book = by_event(db, event.id)
     if book and book.kind == "b":
@@ -123,7 +166,7 @@ def sync_generated_entry(db, event, x):
             budget_item_id=budget.id if budget else None,
             description=x.item_name,
             income_krw=0,
-            expense_krw=x.amount_krw,
+            expense_krw=x.amount_krw if x.amount_krw is not None else null(),
             entry_type="expense",
             review_status=x.review_status,
             sort_order=x.sort_order,

@@ -842,35 +842,43 @@ def delete_receipts(db, event_id, selected):
 
 
 def generate_receipt_draft(db, r, result, source_type="ocr"):
+    from .annual_service import by_event, ensure_other_budget_item, sync_generated_entry
+
     if db.scalar(select(Link).where(Link.receipt_id == r.id)):
         return
-    existing = rows(db, Expense, r.event_id)
-    day = (result.get("transaction_at") or "")[:10]
-    amount = result.get("final_amount_krw")
-    if amount is not None and any(
-        x.amount_krw == amount and (not day or x.expense_date == day) for x in existing
-    ):
-        r.review_reason += "; 기존 지출과 중복 후보: 연결 확인 필요"
-        return
-    cats = [c for c in rows(db, Category, r.event_id) if c.is_active]
-    if not cats:
-        c = Category(event_id=r.event_id, name="미분류")
-        db.add(c)
-        db.flush()
-        cats = [c]
-    suggested = next((c for c in cats if c.id == result.get("suggested_category_id")), None)
     event = db.get(Event, r.event_id)
-    fallback = next((c for c in cats if c.name == "미분류"), cats[0])
+    book = by_event(db, event.id) if event.scope_type != "event" else None
+    categories = rows(db, Category, r.event_id)
+    category = next(
+        (c for c in categories if c.is_active and c.id == result.get("suggested_category_id")),
+        None,
+    )
+    note = "영수증 분석으로 자동 생성된 초안"
+    if category is None:
+        if book and book.kind == "ordinary":
+            item = ensure_other_budget_item(db, book, event)
+            category = db.get(Category, item.category_id)
+            note += " · [임시 분류: 기타]"
+        else:
+            name = "미분류" if book and book.kind == "b" else "기타"
+            category = next((c for c in categories if c.name == name), None)
+            if category is None:
+                category = Category(event_id=event.id, name=name, sort_order=len(categories))
+                db.add(category)
+            category.is_active = True
+            db.flush()
+    existing = rows(db, Expense, r.event_id)
+    amount = r.final_amount_krw
     x = Expense(
         event_id=r.event_id,
-        category_id=(suggested or fallback).id,
-        expense_date=day or None,
-        item_name=result.get("description", "")[:500],
+        category_id=category.id,
+        expense_date=r.transaction_at[:10] if r.transaction_at else None,
+        item_name=r.description[:500],
         amount_krw=amount,
-        vendor=result.get("merchant", ""),
+        vendor=r.merchant,
         purchased=False,
         sort_order=len(existing),
-        note="영수증 분석으로 자동 생성된 초안",
+        note=note,
         source_type=source_type,
         review_status="검토 필요",
         edited_by=source_type,
@@ -878,9 +886,7 @@ def generate_receipt_draft(db, r, result, source_type="ocr"):
     db.add(x)
     db.flush()
     db.add(Link(expense_id=x.id, receipt_id=r.id, allocated_amount_krw=amount))
-    if event.scope_type != "event":
-        from .annual_service import sync_generated_entry
-
+    if book:
         sync_generated_entry(db, event, x)
     audit(db, r.event_id, "auto_draft", None, encode(x), x.id, source_type)
 
