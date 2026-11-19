@@ -138,9 +138,12 @@ def context_categories(db, event):
     ]
 
 
-def sync_generated_entry(db, event, x):
+def sync_generated_entry(db, event, x, *, update_existing=False):
     book = by_event(db, event.id)
-    if not book or db.scalar(select(AnnualEntry).where(AnnualEntry.expense_id == x.id)):
+    if not book:
+        return
+    entry = db.scalar(select(AnnualEntry).where(AnnualEntry.expense_id == x.id))
+    if entry and not update_existing:
         return
     date = x.expense_date
     if date and int(date[:4]) != book.year:
@@ -158,22 +161,18 @@ def sync_generated_entry(db, event, x):
         if book.kind == "ordinary"
         else None
     )
-    db.add(
-        AnnualEntry(
-            book_id=book.id,
-            expense_id=x.id,
-            transaction_date=date,
-            budget_item_id=budget.id if budget else None,
-            description=x.item_name,
-            income_krw=0,
-            expense_krw=x.amount_krw if x.amount_krw is not None else null(),
-            entry_type="expense",
-            review_status=x.review_status,
-            sort_order=x.sort_order,
-            note=x.note,
-            source_type=x.source_type,
-        )
-    )
+    if entry is None:
+        entry = AnnualEntry(book_id=book.id, expense_id=x.id, income_krw=0, entry_type="expense")
+        db.add(entry)
+    entry.transaction_date = date
+    entry.budget_item_id = budget.id if budget else None
+    entry.description = x.item_name
+    entry.expense_krw = x.amount_krw if x.amount_krw is not None else null()
+    entry.review_status = x.review_status
+    entry.sort_order = x.sort_order
+    entry.note = x.note
+    entry.source_type = x.source_type
+    entry.updated_at = now()
 
 
 def apply_entry(db, book, event, obj, data):

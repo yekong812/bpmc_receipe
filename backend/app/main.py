@@ -25,7 +25,7 @@ from fastapi import (
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
@@ -860,11 +860,80 @@ def delete_receipts(db, event_id, selected):
             log.exception("영수증 원본 파일 삭제 실패: %s", path)
 
 
-def generate_receipt_draft(db, r, result, source_type="ocr"):
+def generate_receipt_draft(db, receipt, result, source_type="ocr"):
     from .annual_service import by_event, ensure_other_budget_item, sync_generated_entry
 
-    if db.scalar(select(Link).where(Link.receipt_id == r.id)):
+    duplicates = [receipt]
+    if receipt.transaction_at and receipt.final_amount_krw is not None:
+        duplicates = list(
+            db.scalars(
+                select(Receipt).where(
+                    Receipt.event_id == receipt.event_id,
+                    Receipt.ocr_status != "제외",
+                    func.substr(Receipt.transaction_at, 1, 10) == receipt.transaction_at[:10],
+                    Receipt.final_amount_krw == receipt.final_amount_krw,
+                )
+            )
+        )
+    r = min(
+        duplicates, key=lambda r: (len(r.transaction_at or "") < 16, r.transaction_at or "", r.id)
+    )
+    linked = list(
+        db.execute(
+            select(Link, Expense)
+            .join(Expense, Expense.id == Link.expense_id)
+            .where(Link.receipt_id.in_([item.id for item in duplicates]))
+            .order_by(Expense.id)
+        )
+    )
+    if len(duplicates) == 1 and linked:
         return
+    for link, expense in linked:
+        if (
+            expense.source_type not in ("ocr", "llm")
+            or expense.edited_by != expense.source_type
+            or expense.amount_krw != r.final_amount_krw
+            or link.allocated_amount_krw != r.final_amount_krw
+            or db.scalar(
+                select(func.count()).select_from(Link).where(Link.expense_id == expense.id)
+            )
+            != 1
+        ):
+            return
+    kept = next(
+        (pair for pair in linked if pair[0].receipt_id == r.id), linked[0] if linked else None
+    )
+    for pair in linked:
+        if pair is not kept:
+            _, duplicate = pair
+            audit(
+                db,
+                receipt.event_id,
+                "auto_draft_duplicate",
+                encode(duplicate),
+                None,
+                duplicate.id,
+                source_type,
+            )
+            db.delete(duplicate)
+    if kept and kept[0].receipt_id == r.id:
+        return
+    if r.id != receipt.id:
+        extraction = db.scalar(
+            select(Extraction)
+            .where(Extraction.receipt_id == r.id)
+            .order_by(Extraction.id.desc())
+            .limit(1)
+        )
+        result = json.loads(extraction.extracted_json) if extraction else {}
+        source_type = (
+            "llm"
+            if extraction
+            and extraction.input_kind in ("image", "text")
+            and not extraction.error_message
+            else "ocr"
+        )
+
     event = db.get(Event, r.event_id)
     book = by_event(db, event.id) if event.scope_type != "event" else None
     categories = rows(db, Category, r.event_id)
@@ -886,28 +955,34 @@ def generate_receipt_draft(db, r, result, source_type="ocr"):
                 db.add(category)
             category.is_active = True
             db.flush()
-    existing = rows(db, Expense, r.event_id)
     amount = r.final_amount_krw
-    x = Expense(
-        event_id=r.event_id,
-        category_id=category.id,
-        expense_date=r.transaction_at[:10] if r.transaction_at else None,
-        item_name=r.description[:500],
-        amount_krw=amount,
-        vendor=r.merchant,
-        purchased=False,
-        sort_order=len(existing),
-        note=note,
-        source_type=source_type,
-        review_status="검토 필요",
-        edited_by=source_type,
-    )
+    if kept:
+        previous_link, x = kept
+        before = encode(x)
+        db.delete(previous_link)
+    else:
+        before = None
+        x = Expense(
+            event_id=r.event_id,
+            purchased=False,
+            sort_order=len(rows(db, Expense, r.event_id)),
+            review_status="검토 필요",
+        )
+    x.category_id = category.id
+    x.expense_date = r.transaction_at[:10] if r.transaction_at else None
+    x.item_name = r.description[:500]
+    x.amount_krw = amount
+    x.vendor = r.merchant
+    x.note = note
+    x.source_type = source_type
+    x.edited_by = source_type
+    x.edited_at = now()
     db.add(x)
     db.flush()
     db.add(Link(expense_id=x.id, receipt_id=r.id, allocated_amount_krw=amount))
     if book:
-        sync_generated_entry(db, event, x)
-    audit(db, r.event_id, "auto_draft", None, encode(x), x.id, source_type)
+        sync_generated_entry(db, event, x, update_existing=kept is not None)
+    audit(db, r.event_id, "auto_draft", before, encode(x), x.id, source_type)
 
 
 def update_job(job_id, **values):

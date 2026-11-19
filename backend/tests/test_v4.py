@@ -134,6 +134,48 @@ def test_receipt_drafts_reuse_other_budget_and_keep_unknown_fields_empty(client,
         assert entry["expense_krw"] is None and entry["review_status"] == "검토 필요"
 
 
+def test_receipt_draft_uses_earliest_time_across_analysis_jobs(client, monkeypatch):
+    from backend.app import main
+
+    results = {
+        (255, 0, 0): "늦은 거래\n2026-11-08 15:00\n합계 5,000원",
+        (0, 0, 255): "이른 거래\n2026-11-08 09:00\n합계 5,000원",
+        (0, 128, 0): "시간 미확인\n2026-11-08\n합계 5,000원",
+        (255, 255, 0): "다른 거래\n2026-11-09 09:00\n합계 5,000원",
+    }
+
+    def recognize(path):
+        with Image.open(path) as image:
+            return results[image.getpixel((0, 0))]
+
+    monkeypatch.setattr(main, "recognize", recognize)
+    annual = book(client)
+    owner = {"id": annual["owner_event_id"]}
+    analyze = f"/api/events/{owner['id']}/receipts/analyze"
+    for name, colors in (("first", ["red"]), ("second", ["blue", "green", "yellow"])):
+        files = []
+        for color in colors:
+            raw = io.BytesIO()
+            Image.new("RGB", (30, 40), color).save(raw, format="PNG")
+            files.append((f"{color}.png", raw.getvalue()))
+        upload(client, owner, image_zip(files))
+        job = client.post(analyze)
+        assert job.status_code == 202, job.text
+        result = detail(client, annual)
+        if name == "first":
+            first_entry = result["entries"][0]["id"]
+
+    entries = result["entries"]
+    assert [x["transaction_date"] for x in entries] == ["2026-11-08", "2026-11-09"]
+    assert entries[0]["id"] == first_entry
+    assert entries[0]["description"].startswith("이른 거래")
+    linked = {x["receipt_id"] for x in result["owner"]["links"]}
+    assert len(result["owner"]["receipts"]) == 4
+    assert {
+        r["original_name"] for r in result["owner"]["receipts"] if r["id"] in linked
+    } == {"blue.png", "yellow.png"}
+
+
 def test_budget_constraints_official_spending_and_revision(client):
     c = client
     b = budget(c, book(c))
