@@ -1358,12 +1358,14 @@ fieldset:disabled textarea {
   gap: 8px;
   align-items: center;
 }
-.annual-table {
+.annual-table,
+.receipt-table {
   border: 1px solid var(--line);
   border-radius: 7px;
   max-height: 65vh;
 }
-.annual-table th {
+.annual-table th,
+.receipt-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;

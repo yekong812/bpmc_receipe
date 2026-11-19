@@ -444,7 +444,7 @@ export default function ReceiptManager({
           </span>
         </div>
       )}
-      <div className="table-scroll">
+      <div className="table-scroll receipt-table">
         <table>
           <thead>
             <tr>
