@@ -19,7 +19,6 @@ export default function EventForm({
     [eventDate, setEventDate] = useState(event?.event_date || today()),
     [start, setStart] = useState(event?.start_date || today()),
     [end, setEnd] = useState(event?.end_date || today()),
-    [status, setStatus] = useState(event?.status || "작성중"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   return (
@@ -43,7 +42,7 @@ export default function EventForm({
               event_date: eventDate,
               start_date: start,
               end_date: end,
-              status,
+              status: event?.status ?? "작성중",
             });
           } catch (e) {
             setError((e as Error).message);
@@ -98,17 +97,6 @@ export default function EventForm({
             />
           </label>
         </div>
-        <label className="field">
-          진행상태
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {(event?.latest_final_version
-              ? ["재수정중"]
-              : ["작성중", "검토중"]
-            ).map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </label>
         {error && (
           <p className="error-text" role="alert">
             {error}

@@ -300,9 +300,6 @@ test("최종 확정 잠금 → 재오픈 → 재확정 → v1/v2 이력", async 
       name: "지출내역(구매LIST)",
       exact: true,
     });
-    await detail
-      .getByRole("button", { name: "검토중으로 전환", exact: true })
-      .click();
     await expect(
       detail.getByRole("button", { name: "최종 확정", exact: true }),
     ).toBeEnabled();

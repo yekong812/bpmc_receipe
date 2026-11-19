@@ -26,9 +26,6 @@ async function createYear(page: Page, year: number) {
   return form;
 }
 async function confirmBook(page: Page) {
-  await page
-    .getByRole("button", { name: "검토중으로 전환", exact: true })
-    .click();
   await page.getByRole("button", { name: "최종 확정", exact: true }).click();
   const form = page.getByRole("dialog", {
     name: "최종 확정 전 확인",

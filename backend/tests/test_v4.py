@@ -53,11 +53,10 @@ def entry(c, b, **patch):
 def finalize(c, b):
     prefix = f"/api/{b['kind']}/books/{b['id']}"
     d = detail(c, b)
-    assert c.post(prefix + "/review", json={"version": d["version"]}).status_code == 200
     r = c.post(
         prefix + "/finalize",
         json={
-            "version": detail(c, b)["version"],
+            "version": d["version"],
             "acknowledge_warnings": True,
             "approval_reason": "담당자 확인 완료",
         },

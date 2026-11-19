@@ -504,26 +504,7 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
                       임시 저장
                     </button>
                     <button
-                      disabled={dirty || busy || book.status !== "작성중"}
-                      onClick={() =>
-                        action(async () => {
-                          await api(
-                            `/${kind}/books/${book.id}/review`,
-                            "POST",
-                            { version: book.version },
-                          );
-                          await refresh();
-                        })
-                      }
-                    >
-                      검토중으로 전환
-                    </button>
-                    <button
-                      disabled={
-                        dirty ||
-                        busy ||
-                        !["검토중", "재수정중"].includes(book.status)
-                      }
+                      disabled={dirty || busy}
                       onClick={() => setFinalizing(true)}
                     >
                       최종 확정

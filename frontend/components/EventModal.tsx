@@ -142,7 +142,7 @@ export default function EventModal({
       </div>
       <div className="workflow-banner">
         <span>
-          영수증 업로드 → 초안 자동 생성 → 사용자 검토 → 임시 저장 → 최종 확정
+          영수증 업로드 → 지출 초안 작성 → 임시 저장 → 최종 확정
         </span>
         <b>
           {event.latest_final_version
@@ -695,29 +695,7 @@ export default function EventModal({
                 {busy ? "처리 중…" : "임시 저장"}
               </button>
               <button
-                disabled={
-                  busy ||
-                  dirty ||
-                  event.status === "검토중" ||
-                  event.status === "재수정중"
-                }
-                onClick={() =>
-                  action(async () => {
-                    await api(`/events/${event.id}/review`, "POST", {
-                      version: event.version,
-                    });
-                    await refresh();
-                  })
-                }
-              >
-                검토중으로 전환
-              </button>
-              <button
-                disabled={
-                  busy ||
-                  dirty ||
-                  !["검토중", "재수정중"].includes(event.status)
-                }
+                disabled={busy || dirty}
                 onClick={() => setFinalizing(true)}
               >
                 최종 확정

@@ -1212,8 +1212,8 @@ def finalize(event_id: int, data: FinalizeIn, db: Session = Depends(session)):
     e = get(db, Event, event_id)
     if e.version != data.version:
         raise HTTPException(409, "오래된 초안입니다. 다시 열어주세요.")
-    if e.status not in ["검토중", "재수정중"]:
-        raise HTTPException(422, "검토중으로 전환한 뒤 확정하세요.")
+    if e.status not in ["작성중", "검토중", "재수정중"]:
+        raise HTTPException(422, "편집 가능한 초안만 확정할 수 있습니다.")
     result = finalize_check(event_id, db)
     if result["errors"]:
         raise HTTPException(422, " / ".join(result["errors"]))

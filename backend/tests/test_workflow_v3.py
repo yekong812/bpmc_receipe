@@ -9,13 +9,6 @@ def latest(c, e):
     return c.get(f"/api/events/{e['id']}").json()
 
 
-def review(c, e):
-    current = latest(c, e)
-    r = c.post(f"/api/events/{e['id']}/review", json={"version": current["version"]})
-    assert r.status_code == 200, r.text
-    return r.json()
-
-
 def finalize(c, e, reason=""):
     current = latest(c, e)
     return c.post(
@@ -32,7 +25,6 @@ def test_final_lock_reopen_versions_and_default_final_exports(client):
     c = client
     e = create(c)
     x = add(c, e, 8000)
-    review(c, e)
     checks = c.get(f"/api/events/{e['id']}/finalize/check").json()
     assert not checks["errors"] and checks["warnings"]
     assert finalize(c, e).status_code == 422
@@ -78,7 +70,6 @@ def test_final_receipt_bytes_survive_revision_deletion(client):
         ).status_code
         == 200
     )
-    review(c, e)
     final = finalize(c, e)
     assert final.status_code == 200, final.text
     first = c.get(f"/api/events/{e['id']}/receipts/export-zip").content
@@ -142,7 +133,6 @@ def test_failed_ocr_draft_keeps_missing_fields_and_blocks_final(client, monkeypa
     x = latest(c, e)["expenses"][0]
     assert x["expense_date"] is None and x["amount_krw"] is None
     assert c.get(f"/api/events/{e['id']}/finalize/check").json()["errors"]
-    review(c, e)
     assert finalize(c, e, "검토").status_code == 422
 
 
