@@ -250,6 +250,16 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     });
     await expect(confirmedFilter).toBeHidden();
     await statusDropdown.click();
+    const allStatuses = filters.getByRole("checkbox", {
+      name: "전체 선택",
+      exact: true,
+    });
+    await allStatuses.check();
+    await expect(confirmedFilter).toBeChecked();
+    await expect(needsReviewFilter).toBeChecked();
+    await allStatuses.uncheck();
+    await expect(confirmedFilter).not.toBeChecked();
+    await expect(needsReviewFilter).not.toBeChecked();
     await confirmedFilter.check();
     await needsReviewFilter.check();
     await expect(statusDropdown).toHaveText("상태 2개 선택");
@@ -274,6 +284,13 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await statusDropdown.click();
     await expect(needsReviewFilter).toBeChecked();
     await expect(confirmedFilter).not.toBeChecked();
+    await expect(receiptRow).toHaveCount(0);
+    const excludedFilter = filters.getByRole("checkbox", {
+      name: "제외",
+      exact: true,
+    });
+    await excludedFilter.check();
+    await expect(excludedFilter).toBeChecked();
     await expect(receiptRow).toHaveCount(0);
     await filters.getByRole("button", { name: "초기화", exact: true }).click();
     await detail.getByRole("tab", { name: /지출내역/ }).click();

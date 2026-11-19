@@ -40,6 +40,29 @@ const emptyFilters = {
   status: "",
 };
 
+function positionStatusDropdown(dropdown: HTMLDetailsElement) {
+  if (!dropdown.open) return;
+  const panel = dropdown.querySelector(".receipt-status-options");
+  if (!panel) return;
+
+  const trigger = dropdown.getBoundingClientRect();
+  const scrollArea = dropdown.closest(".detail-body")?.getBoundingClientRect();
+  const top = Math.max(0, scrollArea?.top ?? 0);
+  const bottom = Math.min(
+    window.innerHeight,
+    scrollArea?.bottom ?? window.innerHeight,
+  );
+  const spaceAbove = trigger.top - top - 8;
+  const spaceBelow = bottom - trigger.bottom - 8;
+  const opensUp =
+    spaceBelow < panel.scrollHeight + 2 && spaceAbove > spaceBelow;
+  dropdown.toggleAttribute("data-open-up", opensUp);
+  dropdown.style.setProperty(
+    "--status-options-space",
+    `${Math.max(0, opensUp ? spaceAbove : spaceBelow)}px`,
+  );
+}
+
 export default function ReceiptManager({
   event,
   refresh,
@@ -127,6 +150,10 @@ export default function ReceiptManager({
   const input = useRef<HTMLInputElement>(null);
   const statusDropdown = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
+    function repositionStatusDropdown() {
+      if (statusDropdown.current)
+        positionStatusDropdown(statusDropdown.current);
+    }
     function closeStatusDropdown(e: PointerEvent) {
       const dropdown = statusDropdown.current;
       if (
@@ -137,8 +164,13 @@ export default function ReceiptManager({
         dropdown.open = false;
     }
     document.addEventListener("pointerdown", closeStatusDropdown);
-    return () =>
+    window.addEventListener("resize", repositionStatusDropdown);
+    document.addEventListener("scroll", repositionStatusDropdown, true);
+    return () => {
       document.removeEventListener("pointerdown", closeStatusDropdown);
+      window.removeEventListener("resize", repositionStatusDropdown);
+      document.removeEventListener("scroll", repositionStatusDropdown, true);
+    };
   }, []);
   const pending =
     !!editing &&
@@ -233,6 +265,9 @@ export default function ReceiptManager({
     linkedRows.set(link.receipt_id, numbers);
   }
   const selectedStatuses = filters.status ? filters.status.split(",") : [];
+  const allStatusesSelected = receiptStatuses.every((status) =>
+    selectedStatuses.includes(status),
+  );
   const visibleReceipts = event.receipts
     .map((receipt, i) => {
       const expenses = linkedRows.get(receipt.id) ?? [];
@@ -481,6 +516,7 @@ export default function ReceiptManager({
           <details
             ref={statusDropdown}
             className="receipt-status-filters"
+            onToggle={(e) => positionStatusDropdown(e.currentTarget)}
             onBlur={(e) => {
               if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget))
                 e.currentTarget.open = false;
@@ -488,7 +524,7 @@ export default function ReceiptManager({
           >
             <summary>
               상태{" "}
-              {selectedStatuses.length
+              {selectedStatuses.length && !allStatusesSelected
                 ? `${selectedStatuses.length}개 선택`
                 : "전체"}
             </summary>
@@ -497,6 +533,24 @@ export default function ReceiptManager({
               role="group"
               aria-label="영수증 상태"
             >
+              <label className="check-label small receipt-status-select-all">
+                <input
+                  type="checkbox"
+                  checked={allStatusesSelected}
+                  ref={(checkbox) => {
+                    if (checkbox)
+                      checkbox.indeterminate =
+                        selectedStatuses.length > 0 && !allStatusesSelected;
+                  }}
+                  onChange={(e) =>
+                    setFilters({
+                      ...filters,
+                      status: e.target.checked ? receiptStatuses.join(",") : "",
+                    })
+                  }
+                />
+                전체 선택
+              </label>
               {receiptStatuses.map((status) => (
                 <label key={status} className="check-label small">
                   <input
@@ -634,7 +688,8 @@ export default function ReceiptManager({
                   </td>
                   <td>
                     <span
-                      className={`badge ${r.ocr_status === "확인됨" ? "done" : "review"}`}
+                      className="badge receipt-status"
+                      data-status={r.ocr_status}
                     >
                       {r.ocr_status}
                     </span>

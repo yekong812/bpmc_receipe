@@ -444,6 +444,22 @@ button.review:hover:not(:disabled) {
   background: #e8f2e6;
   color: #4b7950;
 }
+.receipt-status[data-status="대기"] {
+  background: #e5efff;
+  color: #284a83;
+}
+.receipt-status[data-status="검토 필요"] {
+  background: #fff5dd;
+  color: #72551b;
+}
+.receipt-status[data-status="확인됨"] {
+  background: #e8f2e6;
+  color: #2f6841;
+}
+.receipt-status[data-status="제외"] {
+  background: #eceef0;
+  color: #4b5563;
+}
 .table-footer {
   padding: 16px 24px;
   display: flex;
@@ -1464,15 +1480,27 @@ fieldset:disabled textarea {
   inset-inline-start: 0;
   z-index: 5;
   min-width: 130px;
-  padding: 5px 0;
+  max-height: var(--status-options-space, 150px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 3px 0;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fff;
   box-shadow: 0 6px 18px #192a171a;
 }
+.receipt-status-filters[data-open-up] .receipt-status-options {
+  inset-block-start: auto;
+  inset-block-end: calc(100% + 4px);
+}
 .receipt-status-options label {
-  padding: 7px 10px;
+  margin: 0;
+  padding: 5px 10px;
   cursor: pointer;
+}
+.receipt-status-select-all {
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
 }
 .table-sort {
   border: 0;
