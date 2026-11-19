@@ -37,6 +37,7 @@ export type Link = {
   allocated_amount_krw: number | null;
 };
 export type EventData = {
+  created_at?: string;
   id: number;
   name: string;
   event_date: string;

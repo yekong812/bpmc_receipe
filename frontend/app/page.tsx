@@ -4,19 +4,26 @@ import { api, EventData, won } from "../lib/api";
 import EventForm from "../components/EventForm";
 import EventModal from "../components/EventModal";
 import { statusClass } from "../lib/ui";
+import { useSessionFilters } from "../lib/useSessionFilters";
+
+const emptyFilters = {
+  query: "",
+  status: "",
+  start: "",
+  end: "",
+  eventFrom: "",
+  eventTo: "",
+};
+
 export default function Home() {
   const [events, setEvents] = useState<EventData[]>([]),
     [current, setCurrent] = useState<EventData | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
-  const [query, setQuery] = useState(""),
-    [status, setStatus] = useState(""),
-    [start, setStart] = useState(""),
-    [end, setEnd] = useState(""),
-    [eventFrom, setEventFrom] = useState(""),
-    [eventTo, setEventTo] = useState(""),
-    [sort, setSort] = useState("date"),
+  const [filters, setFilters] = useSessionFilters("events", emptyFilters);
+  const { query, status, start, end, eventFrom, eventTo } = filters;
+  const [sort, setSort] = useState("date"),
     [page, setPage] = useState(1);
   const [create, setCreate] = useState(false),
     [excelCreate, setExcelCreate] = useState(false),
@@ -154,7 +161,9 @@ export default function Home() {
                 aria-label="행사명 검색"
                 placeholder="행사명을 검색하세요"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) =>
+                  setFilters({ ...filters, query: e.target.value })
+                }
               />
             </label>
             <label>
@@ -163,7 +172,9 @@ export default function Home() {
                 aria-label="필터 시작일"
                 type="date"
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(e) =>
+                  setFilters({ ...filters, start: e.target.value })
+                }
               />
             </label>
             <span className="muted">~</span>
@@ -171,7 +182,7 @@ export default function Home() {
               aria-label="필터 종료일"
               type="date"
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              onChange={(e) => setFilters({ ...filters, end: e.target.value })}
             />
             <label>
               <span className="small muted">행사 날짜</span>
@@ -179,7 +190,9 @@ export default function Home() {
                 aria-label="행사 날짜 필터 시작"
                 type="date"
                 value={eventFrom}
-                onChange={(e) => setEventFrom(e.target.value)}
+                onChange={(e) =>
+                  setFilters({ ...filters, eventFrom: e.target.value })
+                }
               />
             </label>
             <span className="muted">~</span>
@@ -187,12 +200,16 @@ export default function Home() {
               aria-label="행사 날짜 필터 종료"
               type="date"
               value={eventTo}
-              onChange={(e) => setEventTo(e.target.value)}
+              onChange={(e) =>
+                setFilters({ ...filters, eventTo: e.target.value })
+              }
             />
             <select
               aria-label="상태 필터"
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) =>
+                setFilters({ ...filters, status: e.target.value })
+              }
             >
               <option value="">모든 상태</option>
               {["작성중", "검토중", "최종 확정", "재수정중"].map((s) => (
@@ -201,14 +218,7 @@ export default function Home() {
             </select>
             <button
               className="text-button"
-              onClick={() => {
-                setQuery("");
-                setStatus("");
-                setStart("");
-                setEnd("");
-                setEventFrom("");
-                setEventTo("");
-              }}
+              onClick={() => setFilters(emptyFilters)}
             >
               초기화
             </button>

@@ -247,7 +247,15 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await amountFilter.fill("5000");
     await statusFilter.selectOption("검토 필요");
     await expect(receiptRow).toHaveCount(0);
+    await detail.getByRole("tab", { name: /지출내역/ }).click();
+    await detail.getByRole("tab", { name: /영수증 관리/ }).click();
+    await expect(amountFilter).toHaveValue("5000");
+    await expect(statusFilter).toHaveValue("검토 필요");
+    await expect(receiptRow).toHaveCount(0);
     await filters.getByRole("button", { name: "초기화", exact: true }).click();
+    await detail.getByRole("tab", { name: /지출내역/ }).click();
+    await detail.getByRole("tab", { name: /영수증 관리/ }).click();
+    await expect(amountFilter).toHaveValue("");
     await expect(receiptRow).toBeVisible();
     const amountHeader = detail.getByRole("columnheader", {
       name: "최종금액",

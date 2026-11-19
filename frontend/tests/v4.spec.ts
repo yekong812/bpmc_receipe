@@ -102,6 +102,12 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
   await expect(page.locator(".record-actions")).toContainText(
     "현재 장부가 저장",
   );
+  const entrySearch = page.getByLabel("거래 내용 검색", { exact: true });
+  await entrySearch.fill("팀장 모임");
+  await page.getByRole("tab", { name: "예산 현황", exact: true }).click();
+  await page.getByRole("tab", { name: "경상비 장부", exact: true }).click();
+  await expect(entrySearch).toHaveValue("팀장 모임");
+  await page.getByRole("button", { name: "초기화", exact: true }).click();
   const [draftFile] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "↧ Excel", exact: true }).click(),

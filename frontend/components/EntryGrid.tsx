@@ -2,7 +2,17 @@
 import { useState } from "react";
 import { Book, Entry } from "../lib/annual";
 import { won } from "../lib/api";
+import { useSessionFilters } from "../lib/useSessionFilters";
 import WonInput from "./WonInput";
+
+const emptyFilters = {
+  month: "",
+  section: "",
+  leafFilter: "",
+  receiptFilter: "",
+  reviewFilter: "",
+  query: "",
+};
 
 export default function EntryGrid({
   book,
@@ -17,13 +27,13 @@ export default function EntryGrid({
   locked: boolean;
   onReceipt: (id: number) => void;
 }) {
-  const [month, setMonth] = useState(""),
-    [section, setSection] = useState(""),
-    [leafFilter, setLeafFilter] = useState(""),
-    [receiptFilter, setReceiptFilter] = useState(""),
-    [reviewFilter, setReviewFilter] = useState(""),
-    [query, setQuery] = useState(""),
-    [selected, setSelected] = useState<number[]>([]),
+  const [filters, setFilters] = useSessionFilters(
+    `entries:${book.kind}:${book.year}:${book.id}`,
+    emptyFilters,
+  );
+  const { month, section, leafFilter, receiptFilter, reviewFilter, query } =
+    filters;
+  const [selected, setSelected] = useState<number[]>([]),
     [focus, setFocus] = useState<number | null>(null),
     [sections, setSections] = useState<Record<string, string>>({});
   const ordinary = book.kind === "ordinary",
@@ -114,12 +124,12 @@ export default function EntryGrid({
           aria-label="거래 내용 검색"
           value={query}
           placeholder="내용 검색"
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => setFilters({ ...filters, query: e.target.value })}
         />
         <select
           aria-label="거래 월 필터"
           value={month}
-          onChange={(e) => setMonth(e.target.value)}
+          onChange={(e) => setFilters({ ...filters, month: e.target.value })}
         >
           <option value="">전체 월</option>
           {Array.from({ length: 12 }, (_, i) => (
@@ -133,10 +143,13 @@ export default function EntryGrid({
             <select
               aria-label="항 필터"
               value={section}
-              onChange={(e) => {
-                setSection(e.target.value);
-                setLeafFilter("");
-              }}
+              onChange={(e) =>
+                setFilters({
+                  ...filters,
+                  section: e.target.value,
+                  leafFilter: "",
+                })
+              }
             >
               <option value="">모든 항</option>
               {parents.map((p) => (
@@ -148,7 +161,9 @@ export default function EntryGrid({
             <select
               aria-label="목 필터"
               value={leafFilter}
-              onChange={(e) => setLeafFilter(e.target.value)}
+              onChange={(e) =>
+                setFilters({ ...filters, leafFilter: e.target.value })
+              }
             >
               <option value="">모든 목</option>
               {leaves
@@ -164,7 +179,9 @@ export default function EntryGrid({
         <select
           aria-label="영수증 연결 필터"
           value={receiptFilter}
-          onChange={(e) => setReceiptFilter(e.target.value)}
+          onChange={(e) =>
+            setFilters({ ...filters, receiptFilter: e.target.value })
+          }
         >
           <option value="">영수증 전체</option>
           <option value="linked">연결됨</option>
@@ -173,7 +190,9 @@ export default function EntryGrid({
         <select
           aria-label="거래 검토 필터"
           value={reviewFilter}
-          onChange={(e) => setReviewFilter(e.target.value)}
+          onChange={(e) =>
+            setFilters({ ...filters, reviewFilter: e.target.value })
+          }
         >
           <option value="">검토 상태 전체</option>
           <option>확인됨</option>
@@ -181,14 +200,7 @@ export default function EntryGrid({
         </select>
         <button
           className="text-button"
-          onClick={() => {
-            setMonth("");
-            setSection("");
-            setLeafFilter("");
-            setReceiptFilter("");
-            setReviewFilter("");
-            setQuery("");
-          }}
+          onClick={() => setFilters(emptyFilters)}
         >
           초기화
         </button>

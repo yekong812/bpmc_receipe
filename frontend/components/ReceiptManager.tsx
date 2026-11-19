@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, download, EventData, Receipt, won } from "../lib/api";
+import { useSessionFilters } from "../lib/useSessionFilters";
 import Dialog from "./Dialog";
 
 const receiptColumns = [
@@ -51,7 +52,10 @@ export default function ReceiptManager({
   reviewTarget?: { id: number; onClose: () => void };
   readOnlyReason?: string;
 }) {
-  const [filters, setFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useSessionFilters(
+    `receipts:${event.id}:${event.created_at}`,
+    emptyFilters,
+  );
   const [checkedIds, setCheckedIds] = useState<number[]>([]);
   const [analysisConfirmation, setAnalysisConfirmation] = useState<
     number[] | null
@@ -610,7 +614,9 @@ export default function ReceiptManager({
             </p>
           )}
           {llm && !llm.enabled && (
-            <p className="muted small">외부 AI 전송 없이 로컬 OCR로 분석합니다.</p>
+            <p className="muted small">
+              외부 AI 전송 없이 로컬 OCR로 분석합니다.
+            </p>
           )}
           <div className="dialog-actions">
             <button type="button" onClick={() => setAnalysisConfirmation(null)}>
