@@ -146,10 +146,21 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       name: "영수증 1번 선택",
     });
     await expect(analysisSelection).toBeChecked();
+    const startAnalysis = detail.getByRole("button", {
+      name: /영수증 분석 시작/,
+    });
+    const analysisDialog = page.getByRole("dialog", {
+      name: "영수증 분석 시작 확인",
+    });
+    await startAnalysis.click();
+    await expect(analysisDialog).toContainText("영수증 1장");
+    await analysisDialog
+      .getByRole("button", { name: "취소", exact: true })
+      .click();
+    await expect(analysisDialog).toBeHidden();
+    await expect(analysisSelection).toBeChecked();
     await analysisSelection.uncheck();
-    await expect(
-      detail.getByRole("button", { name: /영수증 분석 시작/ }),
-    ).toBeDisabled();
+    await expect(startAnalysis).toBeDisabled();
     await receiptRow.click();
     const review = page.getByRole("dialog", { name: "영수증 검토" });
     await expect(
@@ -273,6 +284,23 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await expect(expenseItem).toHaveValue("저장하지 않은 품목");
     await expenseItem.fill("테스트 간식");
     await detail.getByRole("tab", { name: /영수증 관리/ }).click();
+    await analysisSelection.check();
+    await startAnalysis.click();
+    const [analysisResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/events/${event.id}/receipts/analyze`) &&
+          response.request().method() === "POST",
+      ),
+      analysisDialog
+        .getByRole("button", { name: "분석 시작", exact: true })
+        .click(),
+    ]);
+    expect(analysisResponse.status()).toBe(202);
+    expect(analysisResponse.request().postDataJSON()).toEqual({
+      receipt_ids: [receipt.id],
+    });
+    await expect(detail.getByText(/분석 작업 완료/)).toBeVisible();
     await analysisSelection.check();
     const deleteSelected = detail.getByRole("button", {
       name: /선택 영수증 삭제/,

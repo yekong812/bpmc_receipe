@@ -53,6 +53,9 @@ export default function ReceiptManager({
 }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [checkedIds, setCheckedIds] = useState<number[]>([]);
+  const [analysisConfirmation, setAnalysisConfirmation] = useState<
+    number[] | null
+  >(null);
   const [sort, setSort] = useState<{
     column: SortColumn;
     ascending: boolean;
@@ -306,18 +309,7 @@ export default function ReceiptManager({
           <button
             className="receipt-analysis-action"
             disabled={busy || analyzing || !analysisIds.length}
-            onClick={() =>
-              action(async () => {
-                setJob(
-                  await api(`/events/${event.id}/receipts/analyze`, "POST", {
-                    receipt_ids: analysisIds,
-                  }),
-                );
-                setCheckedIds((ids) =>
-                  ids.filter((id) => !analysisIds.includes(id)),
-                );
-              })
-            }
+            onClick={() => setAnalysisConfirmation(analysisIds)}
           >
             {analyzing
               ? `분석 중 ${job?.processed}/${job?.total}`
@@ -601,6 +593,52 @@ export default function ReceiptManager({
   return (
     <>
       {manager}
+      {analysisConfirmation && (
+        <Dialog
+          title="영수증 분석 시작 확인"
+          onClose={() => setAnalysisConfirmation(null)}
+        >
+          <p>
+            선택한 영수증 {analysisConfirmation.length}장의 분석을 시작할까요?
+          </p>
+          {llm?.enabled && (llm.mode !== "vision" || llm.allow_images) && (
+            <p className="alert warning">
+              {llm.allow_images && llm.mode !== "text"
+                ? "영수증 이미지 또는 추출 텍스트가 외부 AI로 전송될 수 있습니다."
+                : "영수증에서 추출한 텍스트가 외부 AI로 전송될 수 있습니다."}{" "}
+              API 사용 요금이 발생할 수 있습니다.
+            </p>
+          )}
+          {llm && !llm.enabled && (
+            <p className="muted small">외부 AI 전송 없이 로컬 OCR로 분석합니다.</p>
+          )}
+          <div className="dialog-actions">
+            <button type="button" onClick={() => setAnalysisConfirmation(null)}>
+              취소
+            </button>
+            <button
+              type="button"
+              className="receipt-analysis-action"
+              disabled={busy || analyzing}
+              onClick={() => {
+                setAnalysisConfirmation(null);
+                action(async () => {
+                  setJob(
+                    await api(`/events/${event.id}/receipts/analyze`, "POST", {
+                      receipt_ids: analysisConfirmation,
+                    }),
+                  );
+                  setCheckedIds((ids) =>
+                    ids.filter((id) => !analysisConfirmation.includes(id)),
+                  );
+                });
+              }}
+            >
+              분석 시작
+            </button>
+          </div>
+        </Dialog>
+      )}
       {editing && (
         <Dialog wide title="영수증 검토" onClose={closeReview}>
           <div className="detail-body receipt-editor">
