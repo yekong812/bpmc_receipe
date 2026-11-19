@@ -5,6 +5,7 @@ import { statusClass } from "../lib/ui";
 type Tab = "expenses" | "receipts" | "categories" | "history";
 
 import Dialog from "./Dialog";
+import SaveNotice from "./SaveNotice";
 import EventForm from "./EventForm";
 import CategoryManager from "./CategoryManager";
 import ExcelImport from "./ExcelImport";
@@ -32,6 +33,7 @@ export default function EventModal({
       initial.expenses.length || importOnOpen ? "expenses" : "receipts",
     ),
     [error, setError] = useState(""),
+    [saveNotice, setSaveNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [importing, setImporting] = useState(importOnOpen),
     [editing, setEditing] = useState(false),
@@ -95,7 +97,13 @@ export default function EventModal({
   }
   function guard(fn: () => void) {
     if (dirty) {
-      setError("지출 변경사항을 먼저 저장하거나 취소해주세요.");
+      setSaveNotice(
+        childDirty
+          ? tab === "receipts"
+            ? "저장하지 않은 영수증 검토값이 있습니다. 검토 팝업에서 ‘검토값 확인’을 누른 뒤 이동해 주세요."
+            : "저장하지 않은 항목 변경사항이 있습니다. 수정한 항목의 ‘저장’을 누른 뒤 이동해 주세요."
+          : "저장하지 않은 지출 변경사항이 있습니다. 화면 하단의 ‘임시 저장’을 누른 뒤 이동해 주세요.",
+      );
       return;
     }
     fn();
@@ -156,9 +164,7 @@ export default function EventModal({
             role="tab"
             aria-selected={tab === id}
             className={tab === id ? "active" : ""}
-            onClick={() =>
-              id === "expenses" ? setTab(id) : guard(() => setTab(id))
-            }
+            onClick={() => id !== tab && guard(() => setTab(id))}
           >
             {label}
             <span>{n}</span>
@@ -731,6 +737,9 @@ export default function EventModal({
           </button>
         </div>
       </footer>
+      {saveNotice && (
+        <SaveNotice message={saveNotice} onClose={() => setSaveNotice("")} />
+      )}
       {finalizing && (
         <FinalizeDialog
           event={event}

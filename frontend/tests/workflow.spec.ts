@@ -30,6 +30,15 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
   await detail.getByLabel("1행 총계", { exact: true }).fill("100700");
   await detail.getByLabel("1행 구매처", { exact: true }).fill("쿠팡");
   await expect(detail.locator(".total-box")).toContainText("100,700");
+  await detail.getByRole("tab", { name: /영수증 관리/ }).click();
+  const saveNotice = page.getByRole("dialog", { name: "저장 안내" });
+  await expect(saveNotice).toBeInViewport();
+  await expect(saveNotice).toContainText("임시 저장");
+  await saveNotice.getByRole("button", { name: "확인", exact: true }).click();
+  await expect(detail.getByRole("tab", { name: /지출내역/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   // A dirty modal warns and stays open when the user declines.
   page.once("dialog", (d) => d.dismiss());
   await detail.getByRole("button", { name: "닫기", exact: true }).click();

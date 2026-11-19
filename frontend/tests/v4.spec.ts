@@ -93,6 +93,14 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
     .selectOption({ label: "팀장운영" });
   await page.getByLabel("1거래 내용", { exact: true }).fill("팀장 모임 간식");
   await page.getByLabel("1거래 지출", { exact: true }).fill("3000");
+  await page.getByRole("tab", { name: "영수증 관리", exact: true }).click();
+  const saveNotice = page.getByRole("dialog", { name: "저장 안내" });
+  await expect(saveNotice).toBeInViewport();
+  await expect(saveNotice).toContainText("임시 저장");
+  await saveNotice.getByRole("button", { name: "확인", exact: true }).click();
+  await expect(
+    page.getByRole("tab", { name: "경상비 장부", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
   await expect(page.locator(".annual-footer")).toContainText(
     "현재 장부가 저장",

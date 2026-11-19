@@ -11,6 +11,7 @@ import {
 import { statusClass } from "../lib/ui";
 import { useWorkspaceDirty } from "./AppShell";
 import Dialog from "./Dialog";
+import SaveNotice from "./SaveNotice";
 import BudgetEditor from "./BudgetEditor";
 import EntryGrid from "./EntryGrid";
 import ReceiptManager from "./ReceiptManager";
@@ -29,6 +30,7 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [saveNotice, setSaveNotice] = useState(""),
     [notice, setNotice] = useState(""),
     [childDirty, setChildDirty] = useState(false),
     [reviewReceiptId, setReviewReceiptId] = useState<number | null>(null),
@@ -112,8 +114,10 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
   }
   function guard(fn: () => void) {
     if (dirty) {
-      setError(
-        "변경사항을 먼저 저장하거나 취소하세요. 영수증 수정값은 해당 탭에서 저장합니다.",
+      setSaveNotice(
+        childDirty
+          ? "저장하지 않은 영수증 검토값이 있습니다. 검토 팝업에서 ‘검토값 확인’을 누른 뒤 이동해 주세요."
+          : "저장하지 않은 장부 변경사항이 있습니다. 화면 하단의 ‘임시 저장’을 누른 뒤 이동해 주세요.",
       );
       return;
     }
@@ -316,7 +320,7 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
                   role="tab"
                   aria-selected={tab === id}
                   className={tab === id ? "active" : ""}
-                  onClick={() => guard(() => setTab(id))}
+                  onClick={() => id !== tab && guard(() => setTab(id))}
                 >
                   {name}
                 </button>
@@ -530,6 +534,9 @@ export default function AnnualLedger({ kind }: { kind: "ordinary" | "b" }) {
             </footer>
           </section>
         </>
+      )}
+      {saveNotice && (
+        <SaveNotice message={saveNotice} onClose={() => setSaveNotice("")} />
       )}
       {creating && (
         <CreateBook
