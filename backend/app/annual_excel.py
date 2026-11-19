@@ -193,6 +193,59 @@ def parse_workbook(data, book, target="entries", mapping=None, sheet_name=""):
     return result
 
 
+WON_FORMAT = '"₩" #,##0;[Red]-"₩" #,##0'
+
+
+def style_table(ws, widths, total_row, *, money_columns, center_columns, subtotals=()):
+    line = Side(style="thin", color="DCE5D9")
+    total_line = Side(style="medium", color="37684E")
+    grid = Border(left=line, right=line, top=line, bottom=line)
+    total_border = Border(left=line, right=line, top=total_line, bottom=total_line)
+    header_fill = PatternFill("solid", fgColor="315942")
+    total_fill = PatternFill("solid", fgColor="204733")
+    subtotal_fill = PatternFill("solid", fgColor="E8F0E5")
+    band_fill = PatternFill("solid", fgColor="F7FAF6")
+    body_font = Font(name="맑은 고딕", size=10, color="283B30")
+    header_font = Font(name="맑은 고딕", size=10, color="FFFFFF", bold=True)
+    total_font = Font(name="맑은 고딕", size=12, color="FFFFFF", bold=True)
+    subtotal_font = Font(name="맑은 고딕", size=10, color="315942", bold=True)
+    ws["A1"].font = Font(name="맑은 고딕", size=17, color="204733", bold=True)
+    ws["A1"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[1].height = 34
+    ws.row_dimensions[2].height = 8
+    ws.row_dimensions[3].height = 25
+    ws.row_dimensions[total_row].height = 29
+    for row in subtotals:
+        ws.row_dimensions[row].height = 22
+    for col, width in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+    for row in ws.iter_rows(min_row=3, max_row=total_row, max_col=len(widths)):
+        for cell in row:
+            cell.border = grid
+            column = cell.column
+            number = column in money_columns and cell.row != 3
+            centered = cell.row == 3 or column in center_columns or cell.value == "합계"
+            cell.alignment = Alignment(
+                horizontal="right" if number else "center" if centered else "left",
+                vertical="center",
+                indent=0 if centered and not number else 1,
+                wrap_text=not number,
+            )
+            if number:
+                cell.number_format = WON_FORMAT
+            if cell.row == 3:
+                cell.fill, cell.font = header_fill, header_font
+            elif cell.row == total_row:
+                cell.fill, cell.font, cell.border = total_fill, total_font, total_border
+            elif cell.row in subtotals:
+                cell.fill, cell.font = subtotal_fill, subtotal_font
+            else:
+                cell.font = body_font
+                if cell.row % 2 == 0:
+                    cell.fill = band_fill
+
+
 def export_book(snapshot):
     annual = snapshot["annual"]
     book = annual["book"]
@@ -261,6 +314,32 @@ def export_book(snapshot):
     ledger.cell(
         5, len(headers) + 5, sum((e["income_krw"] or 0) - (e["expense_krw"] or 0) for e in entries)
     )
+    style_table(
+        ledger,
+        [15, 18, 20, 45, 17, 17, 17] if ordinary else [15, 52, 17, 17, 17],
+        last,
+        money_columns=(income_col, expense_col),
+        center_columns=(1, len(headers)),
+    )
+    ledger.column_dimensions[get_column_letter(len(headers) + 1)].width = 3
+    ledger.column_dimensions[get_column_letter(len(headers) + 3)].width = 3
+    ledger.column_dimensions[get_column_letter(len(headers) + 4)].width = 14
+    ledger.column_dimensions[get_column_letter(len(headers) + 5)].width = 18
+    summary_line = Side(style="thin", color="DCE5D9")
+    summary_border = Border(
+        left=summary_line, right=summary_line, top=summary_line, bottom=summary_line
+    )
+    for row in ledger.iter_rows(
+        min_row=3, max_row=5, min_col=len(headers) + 4, max_col=len(headers) + 5
+    ):
+        label, value = row
+        for cell in row:
+            cell.fill = PatternFill("solid", fgColor="DDECDD" if cell.row == 5 else "F1F6EF")
+            cell.font = Font(name="맑은 고딕", size=10, color="204733", bold=True)
+            cell.border = summary_border
+        label.alignment = Alignment(horizontal="center", vertical="center")
+        value.alignment = Alignment(horizontal="right", vertical="center", indent=1)
+        value.number_format = WON_FORMAT
     if ordinary:
         ws = wb.create_sheet("예산 현황", 0)
         ws.merge_cells("A1:H1")
@@ -272,6 +351,7 @@ def export_book(snapshot):
         ):
             ws.cell(3, c, h)
         n = 4
+        subtotals = set()
         groups = {}
         for leaf in [b for b in budgets if b["level"] == 3]:
             section = items[leaf["parent_id"]]
@@ -309,11 +389,20 @@ def export_book(snapshot):
             ws.cell(n, 4, budget_sum)
             ws.cell(n, 6, spent_sum)
             ws.cell(n, 7, budget_sum - spent_sum)
+            subtotals.add(n)
             n += 1
         ws.cell(n, 3, "합계")
         ws.cell(n, 4, sum(b["budget_krw"] for b in budgets if b["level"] == 3))
         ws.cell(n, 6, sum(e["expense_krw"] or 0 for e in entries))
         ws.cell(n, 7, ws.cell(n, 4).value - ws.cell(n, 6).value)
+        style_table(
+            ws,
+            [18, 18, 22, 17, 38, 17, 17, 12],
+            n,
+            money_columns=(4, 6, 7),
+            center_columns=(8,),
+            subtotals=subtotals,
+        )
         active = [b for b in budgets if b["level"] == 3 and b["is_active"]]
         if active:
             options = wb.create_sheet("항목목록")
@@ -326,7 +415,6 @@ def export_book(snapshot):
             dv = DataValidation(type="list", formula1="BudgetLeaves")
             ledger.add_data_validation(dv)
             dv.add("C4:C10000")
-    thin = Side(style="thin", color="DCE5D9")
     for ws in wb:
         if ws.sheet_state == "hidden":
             continue
@@ -334,28 +422,15 @@ def export_book(snapshot):
         ws.sheet_view.showGridLines = False
         ws.page_setup.orientation = "landscape"
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
         ws.print_title_rows = "1:3"
         ws.print_area = ws.dimensions
-        for col in range(1, ws.max_column + 1):
-            ws.column_dimensions[get_column_letter(col)].width = (
-                18 if col != (4 if ordinary and ws is ledger else 2) else 38
-            )
         for row in ws:
             for cell in row:
-                if cell.row in [1, 3]:
-                    cell.fill = PatternFill("solid", fgColor="DDECDD")
-                    cell.font = Font(bold=True, size=16 if cell.row == 1 else 11)
-                if cell.value is not None:
-                    cell.border = Border(bottom=thin)
-                    cell.alignment = Alignment(
-                        vertical="center",
-                        horizontal="right" if isinstance(cell.value, (int, float)) else "left",
-                    )
-                    if isinstance(cell.value, (int, float)) and cell.number_format == "General":
-                        cell.number_format = "₩#,##0"
-                    if isinstance(cell.value, str) and cell.value.startswith(("=", "+", "-", "@")):
-                        cell.data_type = "s"
+                if isinstance(cell.value, str) and cell.value.startswith(("=", "+", "-", "@")):
+                    cell.data_type = "s"
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

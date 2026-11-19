@@ -304,6 +304,17 @@ def test_annual_excel_roundtrip_and_wrong_year(client):
     assert raw.status_code == 200
     wb = load_workbook(io.BytesIO(raw.content))
     assert wb.sheetnames[:2] == ["예산 현황", "경상비 장부"]
+    ledger = wb["경상비 장부"]
+    assert ledger["A3"].alignment.horizontal == ledger["A4"].alignment.horizontal == "center"
+    assert ledger["D4"].alignment.horizontal == "left" and ledger["D4"].alignment.wrap_text
+    assert ledger["F4"].alignment.horizontal == "right" and "₩" in ledger["F4"].number_format
+    assert ledger["D4"].border.right.style == ledger["D4"].border.bottom.style == "thin"
+    assert ledger["F5"].value == 5000 and ledger["F5"].font.bold
+    assert ledger["F5"].border.top.style == "medium"
+    budget_sheet = wb["예산 현황"]
+    assert budget_sheet["H4"].number_format == "0.0%"
+    assert budget_sheet["D5"].fill != budget_sheet["D6"].fill
+    assert budget_sheet["D6"].value == 10000 and budget_sheet["D6"].font.bold
     p = import_preview(c, b, raw.content)
     assert len(p["rows"]) == 1 and not p["errors"] and p["warnings"]
     result = c.post(
@@ -329,6 +340,9 @@ def test_annual_excel_roundtrip_and_wrong_year(client):
     cash = book(c, "b")
     entry(c, cash, income_krw=12000, expense_krw=0, entry_type="carryover", description="전기 잔액")
     data = c.get(f"/api/b/books/{cash['id']}/excel/export?draft=true").content
+    b_sheet = load_workbook(io.BytesIO(data))["B 장부"]
+    assert b_sheet["C5"].value == 12000 and b_sheet["C5"].border.top.style == "medium"
+    assert b_sheet.column_dimensions["G"].hidden
     p = import_preview(c, cash, data)
     assert p["rows"][0]["entry_type"] == "carryover"
 
