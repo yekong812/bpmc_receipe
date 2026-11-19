@@ -117,6 +117,24 @@ export default function EntryGrid({
           >
             선택 삭제 {selected.length || ""}
           </button>
+          <button
+            className="review"
+            disabled={
+              locked ||
+              !selected.some((i) => rows[i]?.review_status === "검토 필요")
+            }
+            onClick={() =>
+              setRows(
+                rows.map((row, i) =>
+                  selected.includes(i) && row.review_status === "검토 필요"
+                    ? { ...row, review_status: "확인됨" }
+                    : row,
+                ),
+              )
+            }
+          >
+            일괄 검토
+          </button>
         </div>
         <span className="small muted">
           조회 {filtered.length}건 · 수입 ₩ {won(totalIncome)} / 지출 ₩{" "}

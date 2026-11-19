@@ -90,6 +90,16 @@ test("경상비 연도 생성·관항목·거래·확정 집계·새해 예산 �
     .selectOption({ label: "팀장운영" });
   await page.getByLabel("1거래 내용", { exact: true }).fill("팀장 모임 간식");
   await page.getByLabel("1거래 지출", { exact: true }).fill("3000");
+  const entryReviewed = page.getByRole("checkbox", {
+    name: "선택 거래 검토 완료",
+    exact: true,
+  });
+  await entryReviewed.uncheck();
+  await page.getByRole("checkbox", { name: "1거래 선택", exact: true }).check();
+  await page
+    .getByRole("button", { name: "일괄 검토", exact: true })
+    .click();
+  await expect(entryReviewed).toBeChecked();
   await page.getByRole("tab", { name: "영수증 관리", exact: true }).click();
   const saveNotice = page.getByRole("dialog", { name: "저장 안내" });
   await expect(saveNotice).toBeInViewport();

@@ -234,7 +234,7 @@ export default function EventModal({
         {tab === "expenses" && (
           <>
             <div className="toolbar">
-              <div className="actions">
+              <div className="actions wrap">
                 <button
                   className="primary"
                   disabled={locked || !activeCats.length || busy}
@@ -271,6 +271,28 @@ export default function EventModal({
                   }}
                 >
                   선택 삭제 {selected.length || ""}
+                </button>
+                <button
+                  className="review"
+                  disabled={
+                    locked ||
+                    busy ||
+                    !selected.some(
+                      (i) => draft[i]?.review_status === "검토 필요",
+                    )
+                  }
+                  onClick={() =>
+                    setDraft(
+                      draft.map((row, i) =>
+                        selected.includes(i) &&
+                        row.review_status === "검토 필요"
+                          ? { ...row, review_status: "확인됨" }
+                          : row,
+                      ),
+                    )
+                  }
+                >
+                  일괄 검토
                 </button>
               </div>
               <div className="actions">

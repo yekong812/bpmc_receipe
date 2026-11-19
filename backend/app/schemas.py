@@ -76,7 +76,7 @@ class ReceiptAnalysisIn(BaseModel):
     receipt_ids: list[int] | None = Field(default=None, min_length=1)
 
 
-class ReceiptDeleteIn(BaseModel):
+class ReceiptSelectionIn(BaseModel):
     receipt_ids: list[int] = Field(min_length=1)
 
 

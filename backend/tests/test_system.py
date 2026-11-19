@@ -348,6 +348,30 @@ def test_analysis_uses_selected_receipts_and_default_skips_processed(client, mon
     assert client.get(f"/api/receipts/{original['id']}/extractions").json() == []
 
 
+def test_bulk_receipt_review_preserves_fields_and_skips_excluded(client):
+    event = create(client)
+    endpoint = f"/api/events/{event['id']}/receipts"
+    receipt = confirm_receipt(client, upload(client, event))
+    editable = client.post(f"/api/receipts/{receipt['id']}/review").json()
+    raw = io.BytesIO()
+    Image.new("RGB", (30, 40), "red").save(raw, format="PNG")
+    uploaded = client.post(
+        f"{endpoint}/upload", files={"file": ("other.png", raw.getvalue())}
+    )
+    excluded_id = uploaded.json()["uploaded_receipt_ids"][0]
+    assert client.post(f"/api/receipts/{excluded_id}/exclude").status_code == 200
+    response = client.post(
+        f"{endpoint}/confirm", json={"receipt_ids": [receipt["id"], excluded_id]}
+    )
+    assert response.json() == {"confirmed_count": 1}
+    receipts = {r["id"]: r for r in client.get(endpoint).json()}
+    assert receipts[excluded_id]["ocr_status"] == "제외"
+    reviewed = receipts[receipt["id"]]
+    assert reviewed["ocr_status"] == "확인됨"
+    for field in ("transaction_at", "merchant", "description", "final_amount_krw", "review_reason"):
+        assert reviewed[field] == editable[field]
+
+
 def test_bulk_receipt_delete_validates_scope_before_deleting(client):
     event = create(client)
     receipt = upload(client, event)

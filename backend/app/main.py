@@ -52,7 +52,7 @@ from .schemas import (
     ExpenseIn,
     BulkIn,
     ReceiptAnalysisIn,
-    ReceiptDeleteIn,
+    ReceiptSelectionIn,
     ReceiptIn,
     LinkIn,
     CommitIn,
@@ -820,12 +820,31 @@ def receipt_delete(receipt_id: int, db: Session = Depends(session)):
 
 
 @app.delete("/api/events/{event_id}/receipts", status_code=204)
-def receipt_bulk_delete(event_id: int, data: ReceiptDeleteIn, db: Session = Depends(session)):
-    ids = set(data.receipt_ids)
+def receipt_bulk_delete(event_id: int, data: ReceiptSelectionIn, db: Session = Depends(session)):
+    selected = scoped_receipts(db, event_id, data.receipt_ids)
+    delete_receipts(db, event_id, selected)
+
+
+@app.post("/api/events/{event_id}/receipts/confirm")
+def receipt_bulk_confirm(event_id: int, data: ReceiptSelectionIn, db: Session = Depends(session)):
+    selected = scoped_receipts(db, event_id, data.receipt_ids)
+    pending = [r for r in selected if r.ocr_status in ("대기", "검토 필요")]
+    if pending:
+        timestamp = now()
+        for r in pending:
+            r.ocr_status = "확인됨"
+            r.edited_at = timestamp
+        touch(db, event_id)
+        db.commit()
+    return {"confirmed_count": len(pending)}
+
+
+def scoped_receipts(db, event_id, receipt_ids):
+    ids = set(receipt_ids)
     selected = [r for r in rows(db, Receipt, event_id) if r.id in ids]
     if len(selected) != len(ids):
-        raise HTTPException(422, "현재 장부에 있는 영수증만 삭제할 수 있습니다.")
-    delete_receipts(db, event_id, selected)
+        raise HTTPException(422, "현재 장부나 행사에 있는 영수증만 선택하세요.")
+    return selected
 
 
 def delete_receipts(db, event_id, selected):

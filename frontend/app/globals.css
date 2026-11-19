@@ -429,6 +429,14 @@ tbody tr:nth-child(even) {
   background: #fff5dd;
   color: #a18a47;
 }
+button.review {
+  border-color: #ebd59e;
+  color: #72551b;
+}
+button.review:hover:not(:disabled) {
+  background: #ffe9b5;
+  border-color: #dcb969;
+}
 .done {
   background: #e8f2e6;
   color: #4b7950;

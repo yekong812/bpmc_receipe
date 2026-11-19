@@ -29,6 +29,16 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
   await detail.getByLabel("1행 품목", { exact: true }).fill("옛날간식");
   await detail.getByLabel("1행 총계", { exact: true }).fill("100700");
   await detail.getByLabel("1행 구매처", { exact: true }).fill("쿠팡");
+  const expenseReviewed = detail.getByRole("checkbox", {
+    name: "1행 검토 완료",
+    exact: true,
+  });
+  await expenseReviewed.uncheck();
+  await detail.getByRole("checkbox", { name: "1행 선택", exact: true }).check();
+  await detail
+    .getByRole("button", { name: "일괄 검토", exact: true })
+    .click();
+  await expect(expenseReviewed).toBeChecked();
   await expect(detail.locator(".total-box")).toContainText("100,700");
   await detail.getByRole("tab", { name: /영수증 관리/ }).click();
   const saveNotice = page.getByRole("dialog", { name: "저장 안내" });
@@ -317,7 +327,15 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       .getByRole("button", { name: "확인", exact: true })
       .click();
     await expect(completedAnalysis).toBeHidden();
+    await receiptRow.click();
+    await review.getByRole("button", { name: "재검토", exact: true }).click();
+    await expect(receiptRow).toContainText("검토 필요");
+    await review.getByRole("button", { name: "닫기", exact: true }).click();
     await analysisSelection.check();
+    await detail
+      .getByRole("button", { name: "일괄 검토", exact: true })
+      .click();
+    await expect(receiptRow).toContainText("확인됨");
     const deleteSelected = detail.getByRole("button", {
       name: /선택 영수증 삭제/,
     });

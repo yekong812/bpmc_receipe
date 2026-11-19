@@ -256,6 +256,9 @@ export default function ReceiptManager({
   const analysisIds = selectedReceipts
     .filter((r) => r.ocr_status !== "제외")
     .map((r) => r.id);
+  const reviewIds = selectedReceipts
+    .filter((r) => r.ocr_status === "대기" || r.ocr_status === "검토 필요")
+    .map((r) => r.id);
   const visibleIds = visibleReceipts.map(({ receipt }) => receipt.id);
   const allVisibleChecked =
     visibleIds.length > 0 &&
@@ -356,6 +359,25 @@ export default function ReceiptManager({
           >
             선택 영수증 삭제
             {selectedReceipts.length ? ` (${selectedReceipts.length}장)` : ""}
+          </button>
+          <button
+            className="review"
+            disabled={busy || analyzing || !reviewIds.length}
+            onClick={() =>
+              action(async () => {
+                const result = await api<{ confirmed_count: number }>(
+                  `/events/${event.id}/receipts/confirm`,
+                  "POST",
+                  { receipt_ids: reviewIds },
+                );
+                await refresh();
+                inform(
+                  `영수증 ${result.confirmed_count}장의 검토를 완료했습니다.`,
+                );
+              })
+            }
+          >
+            일괄 검토
           </button>
         </div>
         {!hideExports && (
