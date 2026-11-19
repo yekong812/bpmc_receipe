@@ -112,7 +112,9 @@ def test_auto_draft_and_reanalysis_preserve_user_edits(client, monkeypatch):
     monkeypatch.setattr(
         main, "recognize", lambda _: "다른 상점\n2026-11-08 09:15\n최종 결제금액 9,000원"
     )
-    assert c.post(f"/api/events/{e['id']}/receipts/analyze").status_code == 202
+    assert c.post(
+        f"/api/events/{e['id']}/receipts/analyze", json={"receipt_ids": [r["id"]]}
+    ).status_code == 202
     data = latest(c, e)
     assert len(data["expenses"]) == 1 and data["expenses"][0]["amount_krw"] == 7500
     assert data["receipts"][0]["final_amount_krw"] == 8000

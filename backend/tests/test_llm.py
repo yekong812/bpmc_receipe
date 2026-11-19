@@ -271,7 +271,9 @@ def test_llm_pipeline_creates_draft_and_preserves_manual_edits(client, monkeypat
         == 200
     )
     confirm_receipt(c, r, 7000)
-    assert c.post(f"/api/events/{e['id']}/receipts/analyze").status_code == 202
+    assert c.post(
+        f"/api/events/{e['id']}/receipts/analyze", json={"receipt_ids": [r["id"]]}
+    ).status_code == 202
     after = c.get(f"/api/events/{e['id']}").json()
     assert len(after["expenses"]) == 1 and after["receipts"][0]["final_amount_krw"] == 7000
     assert "test-key-never-real" not in c.get("/api/health").text

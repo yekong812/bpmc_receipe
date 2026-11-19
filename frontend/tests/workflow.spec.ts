@@ -142,6 +142,14 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       .getByRole("row")
       .filter({ hasText: "receipt.png" });
     await expect(receiptRow).toBeVisible();
+    const analysisSelection = receiptRow.getByRole("checkbox", {
+      name: "영수증 1번 선택",
+    });
+    await expect(analysisSelection).toBeChecked();
+    await analysisSelection.uncheck();
+    await expect(
+      detail.getByRole("button", { name: /영수증 분석 시작/ }),
+    ).toBeDisabled();
     await receiptRow.click();
     const review = page.getByRole("dialog", { name: "영수증 검토" });
     await expect(
@@ -263,6 +271,21 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     ).toBeDisabled();
     await review.getByRole("button", { name: "닫기", exact: true }).click();
     await expect(expenseItem).toHaveValue("저장하지 않은 품목");
+    await expenseItem.fill("테스트 간식");
+    await detail.getByRole("tab", { name: /영수증 관리/ }).click();
+    await analysisSelection.check();
+    const deleteSelected = detail.getByRole("button", {
+      name: /선택 영수증 삭제/,
+    });
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await deleteSelected.click();
+    await expect(receiptRow).toBeVisible();
+    page.once("dialog", (dialog) => dialog.accept());
+    await deleteSelected.click();
+    await expect(receiptRow).toHaveCount(0);
+    await detail.getByRole("tab", { name: /지출내역/ }).click();
+    await expect(expenseItem).toHaveValue("테스트 간식");
+    await expect(receiptNumber).toHaveCount(0);
   } finally {
     await request.delete(`/api/events/${event.id}`).catch(() => {});
   }

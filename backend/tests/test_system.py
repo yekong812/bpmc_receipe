@@ -318,6 +318,53 @@ def test_receipt_zip_image_limit(client):
     assert accepted.json()["uploaded_count"] == 300
 
 
+def test_analysis_uses_selected_receipts_and_default_skips_processed(client, monkeypatch):
+    from backend.app import main
+
+    monkeypatch.setattr(main, "recognize", lambda _: "상점\n2026-11-08 09:15\n합계 5,000원")
+    event = create(client)
+    original = confirm_receipt(client, upload(client, event))
+    endpoint = f"/api/events/{event['id']}/receipts"
+    assert client.post(f"{endpoint}/analyze").status_code == 422
+    files = []
+    for color in ("red", "blue"):
+        raw = io.BytesIO()
+        Image.new("RGB", (30, 40), color).save(raw, format="PNG")
+        files.append((f"{color}.png", raw.getvalue()))
+    response = client.post(
+        f"{endpoint}/upload", files={"file": ("new.zip", image_zip([*files, files[0]]))}
+    )
+    assert response.status_code == 200, response.text
+    new_ids = response.json()["uploaded_receipt_ids"]
+    assert len(new_ids) == 2 and response.json()["duplicate_count"] == 1
+    assert original["id"] not in new_ids
+    assert client.post(f"{endpoint}/analyze", json={"receipt_ids": []}).status_code == 422
+    job = client.post(f"{endpoint}/analyze", json={"receipt_ids": [new_ids[1]]})
+    assert job.status_code == 202, job.text
+    assert job.json()["total"] == 1
+    statuses = {r["id"]: r["ocr_status"] for r in client.get(endpoint).json()}
+    assert statuses == {original["id"]: "확인됨", new_ids[0]: "대기", new_ids[1]: "검토 필요"}
+    assert client.post(f"{endpoint}/analyze").json()["total"] == 1
+    assert client.get(f"/api/receipts/{original['id']}/extractions").json() == []
+
+
+def test_bulk_receipt_delete_validates_scope_before_deleting(client):
+    event = create(client)
+    receipt = upload(client, event)
+    endpoint = f"/api/events/{event['id']}/receipts"
+    assert (
+        client.request("DELETE", endpoint, json={"receipt_ids": [receipt["id"], -1]}).status_code
+        == 422
+    )
+    assert client.get(f"/api/receipts/{receipt['id']}/image").status_code == 200
+    assert (
+        client.request("DELETE", endpoint, json={"receipt_ids": [receipt["id"]]}).status_code
+        == 204
+    )
+    assert client.get(endpoint).json() == []
+    assert client.get(f"/api/receipts/{receipt['id']}/image").status_code == 404
+
+
 def test_receipt_allocation_duplicate_preview_export_and_cascade(client):
     c = client
     e = create(c)

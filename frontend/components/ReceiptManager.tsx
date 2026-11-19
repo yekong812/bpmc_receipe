@@ -52,6 +52,7 @@ export default function ReceiptManager({
   readOnlyReason?: string;
 }) {
   const [filters, setFilters] = useState(emptyFilters);
+  const [checkedIds, setCheckedIds] = useState<number[]>([]);
   const [sort, setSort] = useState<{
     column: SortColumn;
     ascending: boolean;
@@ -229,6 +230,15 @@ export default function ReceiptManager({
         : String(left).localeCompare(String(right), "ko", { numeric: true });
     return sort.ascending ? order : -order;
   });
+  const selectedReceipts = event.receipts.filter((r) =>
+    checkedIds.includes(r.id),
+  );
+  const analysisIds = selectedReceipts
+    .filter((r) => r.ocr_status !== "제외")
+    .map((r) => r.id);
+  const visibleIds = visibleReceipts.map(({ receipt }) => receipt.id);
+  const allVisibleChecked =
+    visibleIds.length > 0 && visibleIds.every((id) => checkedIds.includes(id));
   const manager = !reviewTarget && (
     <div>
       {llm && (
@@ -239,7 +249,7 @@ export default function ReceiptManager({
         </p>
       )}
       <div className="toolbar">
-        <div className="actions">
+        <div className="actions wrap">
           <input
             hidden
             ref={input}
@@ -251,7 +261,11 @@ export default function ReceiptManager({
                 action(async () => {
                   const d = new FormData();
                   d.append("file", f);
-                  let r: { uploaded_count: number; duplicate_count: number };
+                  let r: {
+                    uploaded_count: number;
+                    uploaded_receipt_ids: number[];
+                    duplicate_count: number;
+                  };
                   try {
                     r = await api(
                       `/events/${event.id}/receipts/upload`,
@@ -274,6 +288,7 @@ export default function ReceiptManager({
                     } else throw error;
                   }
                   await refresh();
+                  setCheckedIds(r.uploaded_receipt_ids);
                   inform(
                     `${r.uploaded_count}장 업로드 · 중복 ${r.duplicate_count}장 제외`,
                   );
@@ -282,24 +297,54 @@ export default function ReceiptManager({
             }}
           />
           <button
+            className="primary"
             disabled={busy || analyzing}
             onClick={() => input.current?.click()}
           >
             ↥ 영수증 ZIP 업로드
           </button>
           <button
-            disabled={busy || analyzing || !event.receipts.length}
+            className="receipt-analysis-action"
+            disabled={busy || analyzing || !analysisIds.length}
             onClick={() =>
               action(async () => {
                 setJob(
-                  await api(`/events/${event.id}/receipts/analyze`, "POST"),
+                  await api(`/events/${event.id}/receipts/analyze`, "POST", {
+                    receipt_ids: analysisIds,
+                  }),
+                );
+                setCheckedIds((ids) =>
+                  ids.filter((id) => !analysisIds.includes(id)),
                 );
               })
             }
           >
             {analyzing
               ? `분석 중 ${job?.processed}/${job?.total}`
-              : "◎ 영수증 분석 시작"}
+              : `◎ 영수증 분석 시작${analysisIds.length ? ` (${analysisIds.length}장)` : ""}`}
+          </button>
+          <button
+            className="delete-action"
+            disabled={busy || analyzing || !selectedReceipts.length}
+            onClick={() => {
+              if (
+                !confirm(
+                  `선택한 영수증 ${selectedReceipts.length}장의 원본과 지출 연결을 삭제할까요? 지출 내역은 보관됩니다.`,
+                )
+              )
+                return;
+              action(async () => {
+                await api(`/events/${event.id}/receipts`, "DELETE", {
+                  receipt_ids: selectedReceipts.map((r) => r.id),
+                });
+                setCheckedIds([]);
+                await refresh();
+                inform(`영수증 ${selectedReceipts.length}장을 삭제했습니다.`);
+              });
+            }}
+          >
+            선택 영수증 삭제
+            {selectedReceipts.length ? ` (${selectedReceipts.length}장)` : ""}
           </button>
         </div>
         {!hideExports && (
@@ -349,7 +394,7 @@ export default function ReceiptManager({
         JPG·PNG·WebP / ZIP당 최대 300장, 60MB (압축 해제 후 총 250MB) · 이미지
         한 장당 최대 20MB · 개별 이미지 업로드 가능 · 날짜·금액을 확인하고
         영수증을 연결하세요. 분석 후 지출 초안을 자동 생성하며 최종 확정은
-        사용자만 할 수 있습니다.
+        사용자만 할 수 있습니다. 분석할 영수증을 체크한 뒤 분석을 시작하세요.
       </p>
       {job && job.status !== "running" && (
         <p className="small muted">
@@ -411,6 +456,22 @@ export default function ReceiptManager({
         <table>
           <thead>
             <tr>
+              <th scope="col">
+                <input
+                  type="checkbox"
+                  aria-label="현재 검색 결과 영수증 전체 선택"
+                  disabled={busy || analyzing || !visibleIds.length}
+                  checked={allVisibleChecked}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setCheckedIds((ids) =>
+                      checked
+                        ? [...new Set([...ids, ...visibleIds])]
+                        : ids.filter((id) => !visibleIds.includes(id)),
+                    );
+                  }}
+                />
+              </th>
               {receiptColumns.map(([column, label]) => {
                 const active = sort.column === column;
                 return (
@@ -458,12 +519,32 @@ export default function ReceiptManager({
                   }
                   onClick={() => select(r)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
+                    if (
+                      e.target === e.currentTarget &&
+                      (e.key === "Enter" || e.key === " ")
+                    ) {
                       e.preventDefault();
                       select(r);
                     }
                   }}
                 >
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={`영수증 ${number}번 선택`}
+                      disabled={busy || analyzing}
+                      checked={checkedIds.includes(r.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setCheckedIds((ids) =>
+                          checked
+                            ? [...ids, r.id]
+                            : ids.filter((id) => id !== r.id),
+                        );
+                      }}
+                    />
+                  </td>
                   <td>{number}</td>
                   <td>
                     <strong>{r.original_name}</strong>
@@ -505,7 +586,11 @@ export default function ReceiptManager({
               영수증 사진을 ZIP으로 묶어 업로드하면 검토와 연결을 시작할 수
               있어요.
             </p>
-            <button onClick={() => input.current?.click()}>
+            <button
+              className="primary"
+              disabled={busy || analyzing}
+              onClick={() => input.current?.click()}
+            >
               ZIP 파일 선택
             </button>
           </div>

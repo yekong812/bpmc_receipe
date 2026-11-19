@@ -42,7 +42,7 @@ from .annual_service import (
     LABEL,
 )
 from .annual_excel import parse_workbook, export_book
-from .schemas import RevisionIn, FinalizeIn, CommitIn
+from .schemas import RevisionIn, FinalizeIn, CommitIn, ReceiptAnalysisIn
 from .workflow import editable, audit, version_row, receipt_archive
 from .ppt import generate_ppt, MIME, select_receipts
 
@@ -492,12 +492,16 @@ async def upload_receipts(
 
 @router.post("/{kind}/books/{book_id}/receipts/analyze", status_code=202)
 def analyze_receipts(
-    kind: Kind, book_id: int, background: BackgroundTasks, db: Session = Depends(session)
+    kind: Kind,
+    book_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(session),
+    data: ReceiptAnalysisIn | None = None,
 ):
     from .main import analyze
 
     b = get_book(db, kind, book_id)
-    return analyze(b.owner_event_id, background, db)
+    return analyze(b.owner_event_id, background, db, data)
 
 
 @router.get("/{kind}/books/{book_id}/excel/import/template")

@@ -72,6 +72,14 @@ class BulkIn(BaseModel):
     expenses: list[ExpenseIn] = Field(max_length=5000)
 
 
+class ReceiptAnalysisIn(BaseModel):
+    receipt_ids: list[int] | None = Field(default=None, min_length=1)
+
+
+class ReceiptDeleteIn(BaseModel):
+    receipt_ids: list[int] = Field(min_length=1)
+
+
 class ReceiptIn(BaseModel):
     transaction_at: datetime | date | None = None
     merchant: str = Field(default="", max_length=200)

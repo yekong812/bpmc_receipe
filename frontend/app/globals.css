@@ -59,6 +59,15 @@ button:disabled {
   background: #852f28;
   border-color: #852f28;
 }
+.receipt-analysis-action {
+  background: #314f8a;
+  border-color: #314f8a;
+  color: white;
+}
+.receipt-analysis-action:hover:not(:disabled) {
+  background: #263f70;
+  border-color: #263f70;
+}
 input,
 select,
 textarea {

@@ -51,6 +51,8 @@ from .schemas import (
     CategoryIn,
     ExpenseIn,
     BulkIn,
+    ReceiptAnalysisIn,
+    ReceiptDeleteIn,
     ReceiptIn,
     LinkIn,
     CommitIn,
@@ -700,7 +702,7 @@ async def receipt_upload(
         )
     next_number = max(previous_numbers, default=0) + 1
     saved = []
-    count = 0
+    uploaded = []
     duplicates = 0
     try:
         for name, suffix, raw, digest in images:
@@ -722,17 +724,16 @@ async def receipt_upload(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(raw)
             saved.append(path)
-            db.add(
-                Receipt(
-                    event_id=event_id,
-                    receipt_number=next_number,
-                    original_name=name,
-                    stored_path=rel,
-                    sha256=digest,
-                    review_reason="OCR 분석 또는 수동 입력 필요",
-                )
+            receipt = Receipt(
+                event_id=event_id,
+                receipt_number=next_number,
+                original_name=name,
+                stored_path=rel,
+                sha256=digest,
+                review_reason="OCR 분석 또는 수동 입력 필요",
             )
-            count += 1
+            db.add(receipt)
+            uploaded.append(receipt)
             next_number += 1
         touch(db, event_id)
         db.commit()
@@ -742,7 +743,8 @@ async def receipt_upload(
             p.unlink(missing_ok=True)
         raise
     return {
-        "uploaded_count": count,
+        "uploaded_count": len(uploaded),
+        "uploaded_receipt_ids": [receipt.id for receipt in uploaded],
         "duplicate_count": duplicates,
         "cross_scope_duplicate_count": len(other),
     }
@@ -814,11 +816,29 @@ def receipt_review(receipt_id: int, db: Session = Depends(session)):
 @app.delete("/api/receipts/{receipt_id}", status_code=204)
 def receipt_delete(receipt_id: int, db: Session = Depends(session)):
     r = get(db, Receipt, receipt_id)
-    p = STORAGE / r.stored_path
-    touch(db, r.event_id)
-    db.delete(r)
+    delete_receipts(db, r.event_id, [r])
+
+
+@app.delete("/api/events/{event_id}/receipts", status_code=204)
+def receipt_bulk_delete(event_id: int, data: ReceiptDeleteIn, db: Session = Depends(session)):
+    ids = set(data.receipt_ids)
+    selected = [r for r in rows(db, Receipt, event_id) if r.id in ids]
+    if len(selected) != len(ids):
+        raise HTTPException(422, "현재 장부에 있는 영수증만 삭제할 수 있습니다.")
+    delete_receipts(db, event_id, selected)
+
+
+def delete_receipts(db, event_id, selected):
+    paths = [STORAGE / r.stored_path for r in selected]
+    touch(db, event_id)
+    for r in selected:
+        db.delete(r)
     db.commit()
-    p.unlink(missing_ok=True)
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            log.exception("영수증 원본 파일 삭제 실패: %s", path)
 
 
 def generate_receipt_draft(db, r, result, source_type="ocr"):
@@ -976,7 +996,12 @@ def run_ocr(job_id, ids):
 
 
 @app.post("/api/events/{event_id}/receipts/analyze", status_code=202)
-def analyze(event_id: int, background: BackgroundTasks, db: Session = Depends(session)):
+def analyze(
+    event_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(session),
+    data: ReceiptAnalysisIn | None = None,
+):
     get(db, Event, event_id)
     with JOB_LOCK:
         active = next(
@@ -984,8 +1009,19 @@ def analyze(event_id: int, background: BackgroundTasks, db: Session = Depends(se
             None,
         )
         if active:
+            if data and data.receipt_ids is not None:
+                raise HTTPException(409, "진행 중인 영수증 분석이 끝난 뒤 다시 시도하세요.")
             return active
-        ids = [r.id for r in rows(db, Receipt, event_id) if r.ocr_status != "제외"]
+        receipts = rows(db, Receipt, event_id)
+        if data and data.receipt_ids is not None:
+            selected = set(data.receipt_ids)
+            ids = [r.id for r in receipts if r.id in selected and r.ocr_status != "제외"]
+            if len(ids) != len(selected):
+                raise HTTPException(422, "이 장부의 분석 가능한 영수증만 선택하세요.")
+        else:
+            ids = [r.id for r in receipts if r.ocr_status == "대기"]
+        if not ids:
+            raise HTTPException(422, "분석할 영수증이 없습니다.")
         job = {
             "id": uuid.uuid4().hex,
             "event_id": event_id,
@@ -993,9 +1029,9 @@ def analyze(event_id: int, background: BackgroundTasks, db: Session = Depends(se
             "total": len(ids),
             "processed": 0,
         }
-        JOBS[job["id"]] = job
         db.add(ProcessingJob(**job))
         db.commit()
+        JOBS[job["id"]] = job
     background.add_task(run_ocr, job["id"], ids)
     return job
 
@@ -1344,6 +1380,10 @@ class ScopeAnalysisRequest(BaseModel):
     scope_id: int
 
 
+class ScopedReceiptAnalysisIn(ScopeAnalysisRequest, ReceiptAnalysisIn):
+    pass
+
+
 def scope_event(db, scope_type, scope_id):
     if scope_type == "event":
         event = get(db, Event, scope_id)
@@ -1373,11 +1413,11 @@ async def shared_upload(
 
 @app.post("/api/analysis-jobs", status_code=202)
 def shared_analyze(
-    data: ScopeAnalysisRequest, background: BackgroundTasks, db: Session = Depends(session)
+    data: ScopedReceiptAnalysisIn, background: BackgroundTasks, db: Session = Depends(session)
 ):
     event = scope_event(db, data.scope_type, data.scope_id)
     editable(db, event.id)
-    return analyze(event.id, background, db)
+    return analyze(event.id, background, db, data)
 
 
 class ScopeLinkRequest(ScopeAnalysisRequest):
