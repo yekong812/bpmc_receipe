@@ -35,9 +35,7 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
   });
   await expenseReviewed.uncheck();
   await detail.getByRole("checkbox", { name: "1행 선택", exact: true }).check();
-  await detail
-    .getByRole("button", { name: "일괄 검토", exact: true })
-    .click();
+  await detail.getByRole("button", { name: "일괄 검토", exact: true }).click();
   await expect(expenseReviewed).toBeChecked();
   await expect(detail.locator(".total-box")).toContainText("100,700");
   await detail.getByRole("tab", { name: /영수증 관리/ }).click();
@@ -241,11 +239,22 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await filters.getByLabel("거래 종료일").fill("2026-11-08");
     const amountFilter = filters.getByLabel("금액", { exact: true });
     await amountFilter.fill("5000");
-    const statusFilter = filters.getByRole("combobox", {
-      name: "상태",
+    const statusDropdown = filters.locator(".receipt-status-filters > summary");
+    const confirmedFilter = filters.getByRole("checkbox", {
+      name: "확인됨",
       exact: true,
     });
-    await statusFilter.selectOption("확인됨");
+    const needsReviewFilter = filters.getByRole("checkbox", {
+      name: "검토 필요",
+      exact: true,
+    });
+    await expect(confirmedFilter).toBeHidden();
+    await statusDropdown.click();
+    await confirmedFilter.check();
+    await needsReviewFilter.check();
+    await expect(statusDropdown).toHaveText("상태 2개 선택");
+    await statusDropdown.click();
+    await expect(confirmedFilter).toBeHidden();
     await expect(filters.getByRole("status")).toHaveText("검색 결과 1건");
     await filters.getByLabel("거래 종료일").fill("2026-11-07");
     await expect(receiptRow).toHaveCount(0);
@@ -255,17 +264,22 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await amountFilter.fill("5001");
     await expect(receiptRow).toHaveCount(0);
     await amountFilter.fill("5000");
-    await statusFilter.selectOption("검토 필요");
+    await statusDropdown.click();
+    await confirmedFilter.uncheck();
     await expect(receiptRow).toHaveCount(0);
     await detail.getByRole("tab", { name: /지출내역/ }).click();
     await detail.getByRole("tab", { name: /영수증 관리/ }).click();
     await expect(amountFilter).toHaveValue("5000");
-    await expect(statusFilter).toHaveValue("검토 필요");
+    await expect(statusDropdown).toHaveText("상태 1개 선택");
+    await statusDropdown.click();
+    await expect(needsReviewFilter).toBeChecked();
+    await expect(confirmedFilter).not.toBeChecked();
     await expect(receiptRow).toHaveCount(0);
     await filters.getByRole("button", { name: "초기화", exact: true }).click();
     await detail.getByRole("tab", { name: /지출내역/ }).click();
     await detail.getByRole("tab", { name: /영수증 관리/ }).click();
     await expect(amountFilter).toHaveValue("");
+    await expect(statusDropdown).toHaveText("상태 전체");
     await expect(receiptRow).toBeVisible();
     const amountHeader = detail.getByRole("columnheader", {
       name: "최종금액",

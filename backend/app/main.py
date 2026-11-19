@@ -668,7 +668,7 @@ async def receipt_upload(
     db: Session = Depends(session),
     confirm_reuse: bool = Form(False),
 ):
-    get(db, Event, event_id)
+    scope = get(db, Event, event_id)
     data = await read_upload(file, MAX_ZIP)
     try:
         if (file.filename or "").lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
@@ -684,41 +684,50 @@ async def receipt_upload(
         raise HTTPException(
             422, str(exc) if isinstance(exc, ValueError) else "유효한 이미지 ZIP을 업로드하세요."
         ) from exc
-    local_hashes = {r.sha256 for r in rows(db, Receipt, event_id)}
-    hashes = {im[3] for im in images} - local_hashes
+    existing = rows(db, Receipt, event_id)
+    references = {}
+    numbered = [(r.receipt_number or i, r) for i, r in enumerate(existing, 1)]
+    for number, receipt in sorted(
+        numbered, key=lambda item: (item[1].ocr_status == "제외", item[0])
+    ):
+        references.setdefault(receipt.sha256, f"영수증 #{number}")
+    hashes = {im[3] for im in images} - references.keys()
     other = list(
-        db.scalars(select(Receipt).where(Receipt.sha256.in_(hashes), Receipt.event_id != event_id))
+        db.execute(
+            select(Receipt, Event.name)
+            .join(Event, Event.id == Receipt.event_id)
+            .where(Receipt.sha256.in_(hashes), Receipt.event_id != event_id)
+            .order_by(Receipt.ocr_status == "제외", Receipt.id)
+        )
     )
     if other and not confirm_reuse:
         raise HTTPException(
             409, "다른 장부·행사에 같은 영수증이 있습니다. 중복 반영을 확인한 뒤 다시 업로드하세요."
         )
-    seen = {r.sha256 for r in rows(db, Receipt, event_id)}
-    previous_numbers = [r.receipt_number or 0 for r in rows(db, Receipt, event_id)]
+    for receipt, name in other:
+        number = receipt.receipt_number or next(
+            i for i, r in enumerate(rows(db, Receipt, receipt.event_id), 1) if r.id == receipt.id
+        )
+        references.setdefault(receipt.sha256, f"{name}의 영수증 #{number}")
+    previous_numbers = [number for number, _ in numbered]
     for archived in db.scalars(select(FinalVersion).where(FinalVersion.event_id == event_id)):
         previous_numbers.extend(
             r.get("receipt_number") or i
             for i, r in enumerate(json.loads(archived.snapshot_json)["receipts"], 1)
         )
     next_number = max(previous_numbers, default=0) + 1
+    annual_scope = db.scalar(select(AnnualBook).where(AnnualBook.owner_event_id == event_id))
+    folder = (
+        f"{scope.scope_type}/{annual_scope.year}/{event_id}"
+        if annual_scope
+        else f"event/{event_id}"
+    )
     saved = []
     uploaded = []
-    duplicates = 0
+    pending = []
     try:
         for name, suffix, raw, digest in images:
-            if digest in seen:
-                duplicates += 1
-                continue
-            seen.add(digest)
-            scope = get(db, Event, event_id)
-            annual_scope = db.scalar(
-                select(AnnualBook).where(AnnualBook.owner_event_id == event_id)
-            )
-            folder = (
-                f"{scope.scope_type}/{annual_scope.year}/{event_id}"
-                if annual_scope
-                else f"event/{event_id}"
-            )
+            reference = references.get(digest)
             rel = f"receipts/{folder}/{uuid.uuid4().hex}{suffix}"
             path = STORAGE / rel
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -730,10 +739,18 @@ async def receipt_upload(
                 original_name=name,
                 stored_path=rel,
                 sha256=digest,
-                review_reason="OCR 분석 또는 수동 입력 필요",
+                ocr_status="제외" if reference else "대기",
+                review_reason=(
+                    f"동일 파일 중복 · 기준: {reference}"
+                    if reference
+                    else "OCR 분석 또는 수동 입력 필요"
+                ),
             )
             db.add(receipt)
             uploaded.append(receipt)
+            if not reference:
+                pending.append(receipt)
+                references[digest] = f"영수증 #{next_number}"
             next_number += 1
         touch(db, event_id)
         db.commit()
@@ -745,7 +762,8 @@ async def receipt_upload(
     return {
         "uploaded_count": len(uploaded),
         "uploaded_receipt_ids": [receipt.id for receipt in uploaded],
-        "duplicate_count": duplicates,
+        "analysis_receipt_ids": [receipt.id for receipt in pending],
+        "duplicate_count": len(uploaded) - len(pending),
         "cross_scope_duplicate_count": len(other),
     }
 

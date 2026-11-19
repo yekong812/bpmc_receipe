@@ -1448,6 +1448,32 @@ fieldset:disabled textarea {
 .receipt-filters input[type="number"] {
   width: 115px;
 }
+.receipt-status-filters {
+  position: relative;
+}
+.receipt-status-filters > summary {
+  padding: 9px 10px;
+  border: 1px solid #dce3db;
+  border-radius: 6px;
+  background: #fff;
+  white-space: nowrap;
+}
+.receipt-status-options {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  z-index: 5;
+  min-width: 130px;
+  padding: 5px 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 6px 18px #192a171a;
+}
+.receipt-status-options label {
+  padding: 7px 10px;
+  cursor: pointer;
+}
 .table-sort {
   border: 0;
   padding: 2px 0;

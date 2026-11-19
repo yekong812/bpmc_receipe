@@ -427,6 +427,9 @@ def test_annual_period_exports_and_cross_scope_reuse_confirmation(client):
         ).status_code
         == 200
     )
+    duplicate = c.get(f"/api/events/{other['owner_event_id']}/receipts").json()[0]
+    assert duplicate["ocr_status"] == "제외"
+    assert f"{b['name']}의 영수증 #{r['receipt_number']}" in duplicate["review_reason"]
 
 
 def test_ai_budget_classification_and_job_usage(client, monkeypatch):

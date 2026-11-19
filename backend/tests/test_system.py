@@ -332,18 +332,26 @@ def test_analysis_uses_selected_receipts_and_default_skips_processed(client, mon
         Image.new("RGB", (30, 40), color).save(raw, format="PNG")
         files.append((f"{color}.png", raw.getvalue()))
     response = client.post(
-        f"{endpoint}/upload", files={"file": ("new.zip", image_zip([*files, files[0]]))}
+        f"{endpoint}/upload",
+        files={"file": ("new.zip", image_zip([*files, ("copy.png", files[0][1])]))},
     )
     assert response.status_code == 200, response.text
-    new_ids = response.json()["uploaded_receipt_ids"]
+    new_ids = response.json()["analysis_receipt_ids"]
+    uploaded_ids = response.json()["uploaded_receipt_ids"]
     assert len(new_ids) == 2 and response.json()["duplicate_count"] == 1
+    assert len(uploaded_ids) == response.json()["uploaded_count"] == 3
     assert original["id"] not in new_ids
     assert client.post(f"{endpoint}/analyze", json={"receipt_ids": []}).status_code == 422
     job = client.post(f"{endpoint}/analyze", json={"receipt_ids": [new_ids[1]]})
     assert job.status_code == 202, job.text
     assert job.json()["total"] == 1
-    statuses = {r["id"]: r["ocr_status"] for r in client.get(endpoint).json()}
-    assert statuses == {original["id"]: "확인됨", new_ids[0]: "대기", new_ids[1]: "검토 필요"}
+    receipts = {r["id"]: r for r in client.get(endpoint).json()}
+    copy = receipts[uploaded_ids[2]]
+    assert copy["ocr_status"] == "제외"
+    assert f"영수증 #{receipts[new_ids[0]]['receipt_number']}" in copy["review_reason"]
+    assert receipts[original["id"]]["ocr_status"] == "확인됨"
+    assert receipts[new_ids[0]]["ocr_status"] == "대기"
+    assert receipts[new_ids[1]]["ocr_status"] == "검토 필요"
     assert client.post(f"{endpoint}/analyze").json()["total"] == 1
     assert client.get(f"/api/receipts/{original['id']}/extractions").json() == []
 
@@ -399,6 +407,13 @@ def test_receipt_allocation_duplicate_preview_export_and_cascade(client):
         f"/api/events/{e['id']}/receipts/upload", files={"file": ("duplicate.zip", image_zip())}
     )
     assert res.json()["duplicate_count"] == 1
+    duplicate_id = res.json()["uploaded_receipt_ids"][0]
+    assert res.json()["analysis_receipt_ids"] == []
+    duplicate = next(
+        row for row in c.get(f"/api/events/{e['id']}/receipts").json() if row["id"] == duplicate_id
+    )
+    assert duplicate["ocr_status"] == "제외"
+    assert f"영수증 #{r['receipt_number']}" in duplicate["review_reason"]
     assert c.get(f"/api/receipts/{r['id']}/image").status_code == 200
     assert c.get(f"/api/events/{e['id']}/receipts/export-zip").status_code == 422
     confirm_receipt(c, r)
@@ -434,7 +449,11 @@ def test_receipt_allocation_duplicate_preview_export_and_cascade(client):
     out = c.get(f"/api/events/{e['id']}/receipts/export-zip?draft=true")
     assert out.status_code == 200
     with zipfile.ZipFile(io.BytesIO(out.content)) as z:
-        assert z.namelist() == ["receipts/1_5000.png", "receipts_summary.csv"]
+        assert z.namelist() == [
+            "receipts/1_5000.png",
+            "excluded/2_unknown.png",
+            "receipts_summary.csv",
+        ]
     p = list(Path(os.environ["STORAGE_DIR"]).glob("receipts/*"))
     assert p
     assert c.delete(f"/api/events/{e['id']}").status_code == 204

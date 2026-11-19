@@ -32,6 +32,7 @@ const receiptFilterFields = [
   ["toDate", "거래 종료일", "date"],
   ["amount", "금액", "number"],
 ] as const;
+const receiptStatuses = ["대기", "검토 필요", "확인됨", "제외"];
 const emptyFilters = {
   fromDate: "",
   toDate: "",
@@ -124,6 +125,21 @@ export default function ReceiptManager({
   }, []);
   const [includeUnknown, setIncludeUnknown] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const statusDropdown = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    function closeStatusDropdown(e: PointerEvent) {
+      const dropdown = statusDropdown.current;
+      if (
+        dropdown?.open &&
+        e.target instanceof Node &&
+        !dropdown.contains(e.target)
+      )
+        dropdown.open = false;
+    }
+    document.addEventListener("pointerdown", closeStatusDropdown);
+    return () =>
+      document.removeEventListener("pointerdown", closeStatusDropdown);
+  }, []);
   const pending =
     !!editing &&
     JSON.stringify(editing) !==
@@ -216,6 +232,7 @@ export default function ReceiptManager({
     numbers.push(number);
     linkedRows.set(link.receipt_id, numbers);
   }
+  const selectedStatuses = filters.status ? filters.status.split(",") : [];
   const visibleReceipts = event.receipts
     .map((receipt, i) => {
       const expenses = linkedRows.get(receipt.id) ?? [];
@@ -237,7 +254,7 @@ export default function ReceiptManager({
         (!filters.fromDate || (day !== undefined && day >= filters.fromDate)) &&
         (!filters.toDate || (day !== undefined && day <= filters.toDate)) &&
         (filters.amount === "" || amount === Number(filters.amount)) &&
-        (!filters.status || status === filters.status)
+        (!selectedStatuses.length || selectedStatuses.includes(status))
       );
     });
   visibleReceipts.sort((a, b) => {
@@ -290,7 +307,7 @@ export default function ReceiptManager({
                   d.append("file", f);
                   let r: {
                     uploaded_count: number;
-                    uploaded_receipt_ids: number[];
+                    analysis_receipt_ids: number[];
                     duplicate_count: number;
                   };
                   try {
@@ -303,7 +320,7 @@ export default function ReceiptManager({
                     if (
                       (error as Error).message.includes("다른 장부") &&
                       confirm(
-                        "다른 장부·행사에 같은 영수증이 있습니다. 중복 반영을 승인하고 이 장부에도 업로드할까요?",
+                        "다른 장부·행사에 같은 영수증이 있습니다. 중복 영수증을 제외 상태로 등록할까요?",
                       )
                     ) {
                       d.append("confirm_reuse", "true");
@@ -315,9 +332,9 @@ export default function ReceiptManager({
                     } else throw error;
                   }
                   await refresh();
-                  setCheckedIds(r.uploaded_receipt_ids);
+                  setCheckedIds(r.analysis_receipt_ids);
                   inform(
-                    `${r.uploaded_count}장 업로드 · 중복 ${r.duplicate_count}장 제외`,
+                    `${r.uploaded_count}장 업로드 · 중복 ${r.duplicate_count}장 제외 상태로 등록`,
                   );
                 });
               e.target.value = "";
@@ -461,20 +478,42 @@ export default function ReceiptManager({
               />
             </label>
           ))}
-          <label>
-            상태
-            <select
-              value={filters.status}
-              onChange={(e) =>
-                setFilters({ ...filters, status: e.target.value })
-              }
+          <details
+            ref={statusDropdown}
+            className="receipt-status-filters"
+            onBlur={(e) => {
+              if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget))
+                e.currentTarget.open = false;
+            }}
+          >
+            <summary>
+              상태{" "}
+              {selectedStatuses.length
+                ? `${selectedStatuses.length}개 선택`
+                : "전체"}
+            </summary>
+            <div
+              className="receipt-status-options"
+              role="group"
+              aria-label="영수증 상태"
             >
-              <option value="">전체</option>
-              {["대기", "검토 필요", "확인됨", "제외"].map((status) => (
-                <option key={status}>{status}</option>
+              {receiptStatuses.map((status) => (
+                <label key={status} className="check-label small">
+                  <input
+                    type="checkbox"
+                    checked={selectedStatuses.includes(status)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...selectedStatuses, status]
+                        : selectedStatuses.filter((item) => item !== status);
+                      setFilters({ ...filters, status: next.join(",") });
+                    }}
+                  />
+                  {status}
+                </label>
               ))}
-            </select>
-          </label>
+            </div>
+          </details>
           <button
             type="button"
             className="text-button"
