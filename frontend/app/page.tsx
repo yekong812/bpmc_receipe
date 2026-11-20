@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, EventData, won } from "../lib/api";
 import EventForm from "../components/EventForm";
-import EventModal from "../components/EventModal";
 import { statusClass } from "../lib/ui";
 import { useSessionFilters } from "../lib/useSessionFilters";
 
@@ -16,8 +16,8 @@ const emptyFilters = {
 };
 
 export default function Home() {
+  const router = useRouter();
   const [events, setEvents] = useState<EventData[]>([]),
-    [current, setCurrent] = useState<EventData | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
@@ -282,10 +282,10 @@ export default function Home() {
                 {filtered.slice((page - 1) * 10, page * 10).map((e, i) => (
                   <tr
                     key={e.id}
-                    onClick={() => setCurrent(e)}
+                    onClick={() => router.push(`/events/${e.id}`)}
                     tabIndex={0}
                     onKeyDown={(k) => {
-                      if (k.key === "Enter") setCurrent(e);
+                      if (k.key === "Enter") router.push(`/events/${e.id}`);
                     }}
                   >
                     <td className="muted">{(page - 1) * 10 + i + 1}</td>
@@ -333,7 +333,7 @@ export default function Home() {
                       >
                         <button
                           className="text-button"
-                          onClick={() => setCurrent(e)}
+                          onClick={() => router.push(`/events/${e.id}`)}
                         >
                           상세 ↗
                         </button>
@@ -432,24 +432,12 @@ export default function Home() {
           onSubmit={async (data) => {
             const e = await api<EventData>("/events", "POST", data);
             setCreate(false);
-            setCurrent(e);
-            await refresh();
+            setExcelCreate(false);
+            router.push(
+              `/events/${e.id}${excelCreate ? "?import=1" : ""}`,
+            );
           }}
           excel={excelCreate}
-        />
-      )}
-      {current && (
-        <EventModal
-          initial={current}
-          events={events}
-          importOnOpen={excelCreate}
-          onClose={() => {
-            setCurrent(null);
-            setExcelCreate(false);
-            refresh();
-          }}
-          onChanged={refresh}
-          inform={inform}
         />
       )}
       {notice && (

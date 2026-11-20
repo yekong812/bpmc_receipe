@@ -17,7 +17,7 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
   await form.getByLabel("시작일", { exact: true }).fill("2026-11-08");
   await form.getByLabel("종료일", { exact: true }).fill("2026-11-15");
   await form.getByRole("button", { name: "행사 만들기", exact: true }).click();
-  const detail = page.getByRole("dialog", {
+  const detail = page.getByRole("region", {
     name: "지출내역(구매LIST)",
     exact: true,
   });
@@ -83,7 +83,7 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
     page.getByRole("dialog", { name: "Excel 가져오기", exact: true }),
   ).not.toBeVisible();
   await expect(detail).toBeVisible();
-  await detail.getByRole("button", { name: "저장 후 닫기" }).click();
+  await detail.getByRole("button", { name: "저장 후 목록" }).click();
   await page
     .getByRole("row")
     .filter({ hasText: name })
@@ -103,7 +103,7 @@ test("행사 생성 → 지출 입력·저장 → 항목 변경 → Excel → �
     path: "test-results/expense-mobile.png",
     fullPage: false,
   });
-  await detail.getByRole("button", { name: "저장 후 닫기" }).click();
+  await detail.getByRole("button", { name: "저장 후 목록" }).click();
   const list = await (await request.get("/api/events")).json();
   const created = list.find((e: { name: string }) => e.name === name);
   await request.delete(`/api/events/${created.id}`);
@@ -138,7 +138,7 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
       .filter({ hasText: event.name })
       .getByRole("button", { name: "상세 ↗" })
       .click();
-    const detail = page.getByRole("dialog", {
+    const detail = page.getByRole("region", {
       name: "지출내역(구매LIST)",
       exact: true,
     });
@@ -423,7 +423,7 @@ test("최종 확정 잠금 → 재오픈 → 재확정 → v1/v2 이력", async 
       .filter({ hasText: event.name })
       .getByRole("button", { name: "상세 ↗" })
       .click();
-    const detail = page.getByRole("dialog", {
+    const detail = page.getByRole("region", {
       name: "지출내역(구매LIST)",
       exact: true,
     });
@@ -528,7 +528,7 @@ test("LLM 분석 이력의 사용량 표시와 후보값 수동 반영", async (
       .filter({ hasText: event.name })
       .getByRole("button", { name: "상세 ↗" })
       .click();
-    const detail = page.getByRole("dialog", {
+    const detail = page.getByRole("region", {
       name: "지출내역(구매LIST)",
       exact: true,
     });

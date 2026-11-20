@@ -1313,6 +1313,35 @@ fieldset:disabled textarea {
   min-height: 0;
   flex: 1 1 auto;
 }
+.event-page {
+  background: white;
+  min-height: calc(100dvh - 76px);
+  display: flex;
+  flex-direction: column;
+}
+.event-page > .dialog-heading {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 17px 26px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  background: white;
+}
+.event-page .detail-body {
+  overflow: visible;
+  flex: none;
+}
+.event-page .receipt-table,
+.event-page .expense-scroll {
+  max-height: calc(100dvh - 340px);
+  overflow: auto;
+}
+.event-page .modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+}
 .tabs {
   overflow-x: auto;
   white-space: nowrap;
@@ -1586,6 +1615,17 @@ fieldset:disabled textarea {
   }
 }
 @media (max-width: 700px) {
+  .event-page {
+    min-height: calc(100dvh - 62px);
+  }
+  .event-page > .dialog-heading {
+    position: static;
+    padding: 15px 16px;
+  }
+  .event-page .receipt-table,
+  .event-page .expense-scroll {
+    max-height: calc(100dvh - 280px);
+  }
   .site-header {
     height: 62px;
   }

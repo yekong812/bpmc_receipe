@@ -4,8 +4,7 @@ import { api, download, EventData, Expense, won } from "../lib/api";
 import { statusClass } from "../lib/ui";
 type Tab = "expenses" | "receipts" | "categories" | "history";
 
-import Dialog from "./Dialog";
-import { usePptDownload } from "./AppShell";
+import { usePptDownload, useWorkspaceDirty } from "./AppShell";
 import SaveNotice from "./SaveNotice";
 import EventForm from "./EventForm";
 import CategoryManager from "./CategoryManager";
@@ -29,6 +28,7 @@ export default function EventModal({
   importOnOpen: boolean;
 }) {
   const downloadPpt = usePptDownload();
+  const setWorkspaceDirty = useWorkspaceDirty();
   const [event, setEvent] = useState(initial),
     [draft, setDraft] = useState<Expense[]>(initial.expenses),
     [tab, setTab] = useState<Tab>(
@@ -60,16 +60,15 @@ export default function EventModal({
     onChanged();
   }, [event.id, onChanged]);
   useEffect(() => {
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    setWorkspaceDirty(dirty);
+    return () => setWorkspaceDirty(false);
+  }, [dirty, setWorkspaceDirty]);
+  useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {
       if (dirty) e.preventDefault();
     };
     window.addEventListener("beforeunload", fn);
-    return () => {
-      document.body.style.overflow = overflow;
-      window.removeEventListener("beforeunload", fn);
-    };
+    return () => window.removeEventListener("beforeunload", fn);
   }, [dirty]);
   async function action(fn: () => Promise<void>) {
     setError("");
@@ -115,7 +114,13 @@ export default function EventModal({
     setDraft(draft.map((x, n) => (n === i ? { ...x, [key]: value } : x)));
   const activeCats = event.categories.filter((c) => c.is_active);
   return (
-    <Dialog wide title="지출내역(구매LIST)" onClose={close}>
+    <section className="event-page" aria-label="지출내역(구매LIST)">
+      <div className="dialog-heading">
+        <h2>지출내역(구매LIST)</h2>
+        <button aria-label="닫기" onClick={close}>
+          ×
+        </button>
+      </div>
       <div className="detail-top">
         <div>
           <h2>
@@ -739,7 +744,7 @@ export default function EventModal({
               })
             }
           >
-            {locked ? "닫기" : "저장 후 닫기"}
+            {locked ? "목록으로" : "저장 후 목록"}
           </button>
         </div>
       </footer>
@@ -779,6 +784,6 @@ export default function EventModal({
           }}
         />
       )}
-    </Dialog>
+    </section>
   );
 }

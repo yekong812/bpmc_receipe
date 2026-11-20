@@ -61,12 +61,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               href={href}
               onClick={(e) => navigate(e, href)}
               aria-current={
-                path === href || (href === "/events" && path === "/")
+                path === href ||
+                (href === "/events" &&
+                  (path === "/" || path.startsWith("/events/")))
                   ? "page"
                   : undefined
               }
               className={
-                path === href || (href === "/events" && path === "/")
+                path === href ||
+                (href === "/events" &&
+                  (path === "/" || path.startsWith("/events/")))
                   ? "active"
                   : ""
               }
