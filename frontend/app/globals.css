@@ -1328,7 +1328,7 @@ fieldset:disabled textarea {
   border-bottom: 1px solid var(--line);
   background: white;
 }
-.event-page .detail-body {
+.event-page > .detail-body {
   overflow: visible;
   flex: none;
 }
