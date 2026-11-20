@@ -174,6 +174,17 @@ test("영수증 ZIP 업로드 → 검토 → 배분 연결 → 정리 ZIP", asyn
     await expect(
       review.getByRole("img", { name: "receipt.png 영수증 원본" }),
     ).toBeVisible();
+    await review.getByRole("button", { name: "중복 제외", exact: true }).click();
+    await expect(receiptRow).toContainText("제외");
+    await expect(
+      review.getByRole("button", { name: "제외 해제", exact: true }),
+    ).toBeEnabled();
+    page.once("dialog", (dialog) => dialog.accept());
+    await review.getByRole("button", { name: "제외 해제", exact: true }).click();
+    await expect(receiptRow).toContainText("대기");
+    await expect(
+      review.getByRole("button", { name: "검토값 확인", exact: true }),
+    ).toBeVisible();
     await review
       .getByLabel("거래일시", { exact: true })
       .fill("2026-11-08T09:15");

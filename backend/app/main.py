@@ -1451,6 +1451,23 @@ def version_detail(event_id: int, version_no: int, db: Session = Depends(session
     return json.loads(version_row(db, e, version_no).snapshot_json)
 
 
+def restore_excluded(db, r):
+    if r.ocr_status != "제외":
+        return None
+    reviewed = bool(
+        r.ocr_text
+        or r.transaction_at
+        or (r.merchant or "").strip()
+        or (r.description or "").strip()
+        or r.final_amount_krw is not None
+        or db.scalar(select(Extraction.id).where(Extraction.receipt_id == r.id).limit(1))
+    )
+    r.ocr_status = "검토 필요" if reviewed else "대기"
+    r.edited_at = now()
+    audit(db, r.event_id, "receipt_restored", "제외", r.ocr_status)
+    return r
+
+
 @app.post("/api/receipts/{receipt_id}/exclude")
 def exclude_receipt(receipt_id: int, db: Session = Depends(session)):
     r = get(db, Receipt, receipt_id)
@@ -1463,6 +1480,26 @@ def exclude_receipt(receipt_id: int, db: Session = Depends(session)):
     touch(db, r.event_id)
     db.commit()
     return encode(r)
+
+
+@app.post("/api/receipts/{receipt_id}/restore")
+def restore_receipt(receipt_id: int, db: Session = Depends(session)):
+    r = get(db, Receipt, receipt_id)
+    if not restore_excluded(db, r):
+        raise HTTPException(409, "제외된 영수증만 대기 또는 검토 상태로 되돌릴 수 있습니다.")
+    touch(db, r.event_id)
+    db.commit()
+    return encode(r)
+
+
+@app.post("/api/events/{event_id}/receipts/restore")
+def receipt_bulk_restore(event_id: int, data: ReceiptSelectionIn, db: Session = Depends(session)):
+    restored = [restore_excluded(db, r) for r in scoped_receipts(db, event_id, data.receipt_ids)]
+    restored = [r for r in restored if r]
+    if restored:
+        touch(db, event_id)
+        db.commit()
+    return {"restored_count": len(restored)}
 
 
 @app.get("/api/events/{event_id}/receipts/export-pptx")

@@ -2,7 +2,7 @@ import io
 import json
 import zipfile
 from openpyxl import load_workbook
-from backend.tests.test_system import client, create, add, upload, confirm_receipt
+from backend.tests.test_system import client, create, add, upload, confirm_receipt, image_zip
 
 
 def latest(c, e):
@@ -189,3 +189,40 @@ def test_exclude_duplicate_and_body_limit(client):
         ).status_code
         == 413
     )
+
+
+def test_restore_excluded_receipt_to_pending_or_review(client):
+    c = client
+    e = create(c)
+    waiting = upload(c, e)
+    assert waiting["ocr_status"] == "대기"
+    assert c.post(f"/api/receipts/{waiting['id']}/exclude").json()["ocr_status"] == "제외"
+    restored = c.post(f"/api/receipts/{waiting['id']}/restore")
+    assert restored.status_code == 200
+    assert restored.json()["ocr_status"] == "대기"
+    assert c.post(f"/api/receipts/{waiting['id']}/restore").status_code == 409
+    reviewed = confirm_receipt(c, waiting)
+    assert reviewed["ocr_status"] == "확인됨"
+    assert c.post(f"/api/receipts/{reviewed['id']}/exclude").json()["ocr_status"] == "제외"
+    again = c.post(f"/api/receipts/{reviewed['id']}/restore")
+    assert again.status_code == 200
+    assert again.json()["ocr_status"] == "검토 필요"
+    duplicate = c.post(
+        f"/api/events/{e['id']}/receipts/upload",
+        files={"file": ("receipts.zip", image_zip(), "application/zip")},
+    )
+    assert duplicate.status_code == 200
+    duplicate_id = duplicate.json()["uploaded_receipt_ids"][0]
+    row = next(
+        r for r in c.get(f"/api/events/{e['id']}/receipts").json() if r["id"] == duplicate_id
+    )
+    assert row["ocr_status"] == "제외"
+    bulk = c.post(
+        f"/api/events/{e['id']}/receipts/restore", json={"receipt_ids": [duplicate_id]}
+    )
+    assert bulk.status_code == 200
+    assert bulk.json() == {"restored_count": 1}
+    row = next(
+        r for r in c.get(f"/api/events/{e['id']}/receipts").json() if r["id"] == duplicate_id
+    )
+    assert row["ocr_status"] == "대기"

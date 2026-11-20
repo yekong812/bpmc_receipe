@@ -232,6 +232,7 @@ export default function ReceiptManager({
   }, [selected, event.version]);
   const analyzing = job?.status === "running";
   const confirmed = editing?.ocr_status === "확인됨";
+  const excluded = editing?.ocr_status === "제외";
   function select(r: Receipt) {
     setSelected(r.id);
     setEditing({ ...r });
@@ -312,6 +313,9 @@ export default function ReceiptManager({
     .map((r) => r.id);
   const reviewIds = selectedReceipts
     .filter((r) => r.ocr_status === "대기" || r.ocr_status === "검토 필요")
+    .map((r) => r.id);
+  const restoreIds = selectedReceipts
+    .filter((r) => r.ocr_status === "제외")
     .map((r) => r.id);
   const visibleIds = visibleReceipts.map(({ receipt }) => receipt.id);
   const allVisibleChecked =
@@ -432,6 +436,31 @@ export default function ReceiptManager({
             }
           >
             일괄 검토
+          </button>
+          <button
+            disabled={busy || analyzing || !restoreIds.length}
+            onClick={() => {
+              if (
+                !confirm(
+                  `선택한 제외 영수증 ${restoreIds.length}장을 대기 또는 검토 상태로 되돌릴까요?`,
+                )
+              )
+                return;
+              action(async () => {
+                const result = await api<{ restored_count: number }>(
+                  `/events/${event.id}/receipts/restore`,
+                  "POST",
+                  { receipt_ids: restoreIds },
+                );
+                await refresh();
+                inform(
+                  `영수증 ${result.restored_count}장을 대기/검토 상태로 되돌렸습니다.`,
+                );
+              });
+            }}
+          >
+            선택 제외 해제
+            {restoreIds.length ? ` (${restoreIds.length}장)` : ""}
           </button>
         </div>
         {!hideExports && (
@@ -806,11 +835,13 @@ export default function ReceiptManager({
                 <p className="small muted">{readOnlyReason}</p>
               )}
               <p className="muted small">
-                {confirmed
-                  ? "확인된 검토값을 수정하려면 재검토를 누르세요."
-                  : "원본과 추출값을 확인한 뒤 검토값 확인을 누르세요. 검토 사유는 메모로 남겨둘 수 있습니다."}
+                {excluded
+                  ? "제외된 영수증입니다. 다시 쓰려면 제외 해제를 누르세요. 값이 있으면 검토 필요, 없으면 대기로 돌아갑니다."
+                  : confirmed
+                    ? "확인된 검토값을 수정하려면 재검토를 누르세요."
+                    : "원본과 추출값을 확인한 뒤 검토값 확인을 누르세요. 검토 사유는 메모로 남겨둘 수 있습니다."}
               </p>
-              <fieldset className="grid-fieldset" disabled={confirmed}>
+              <fieldset className="grid-fieldset" disabled={confirmed || excluded}>
                 {!!extractions.length && (
                   <details className="extraction-comparison">
                     <summary>
@@ -966,29 +997,56 @@ export default function ReceiptManager({
                 </label>
               </fieldset>
               <div className="actions">
+                {excluded ? (
+                  <button
+                    className="primary"
+                    disabled={busy || analyzing}
+                    onClick={() => {
+                      if (
+                        !confirm(
+                          "이 영수증을 제외에서 해제할까요? 추출값이 있으면 검토 필요, 없으면 대기 상태로 돌아갑니다.",
+                        )
+                      )
+                        return;
+                      action(async () => {
+                        const restored = await api<Receipt>(
+                          `/receipts/${editing.id}/restore`,
+                          "POST",
+                        );
+                        await refresh();
+                        inform(
+                          `영수증을 ${restored.ocr_status} 상태로 되돌렸습니다.`,
+                        );
+                      });
+                    }}
+                  >
+                    제외 해제
+                  </button>
+                ) : (
+                  <button
+                    className="primary"
+                    disabled={busy || analyzing}
+                    onClick={() =>
+                      action(async () => {
+                        if (confirmed) {
+                          await api(`/receipts/${editing.id}/review`, "POST");
+                        } else {
+                          await api(`/receipts/${editing.id}`, "PATCH", editing);
+                        }
+                        await refresh();
+                        inform(
+                          confirmed
+                            ? "영수증을 검토 필요 상태로 되돌렸습니다."
+                            : "영수증 검토값을 확인했습니다.",
+                        );
+                      })
+                    }
+                  >
+                    {confirmed ? "재검토" : "검토값 확인"}
+                  </button>
+                )}
                 <button
-                  className="primary"
-                  disabled={busy || analyzing}
-                  onClick={() =>
-                    action(async () => {
-                      if (confirmed) {
-                        await api(`/receipts/${editing.id}/review`, "POST");
-                      } else {
-                        await api(`/receipts/${editing.id}`, "PATCH", editing);
-                      }
-                      await refresh();
-                      inform(
-                        confirmed
-                          ? "영수증을 검토 필요 상태로 되돌렸습니다."
-                          : "영수증 검토값을 확인했습니다.",
-                      );
-                    })
-                  }
-                >
-                  {confirmed ? "재검토" : "검토값 확인"}
-                </button>
-                <button
-                  disabled={confirmed || !pending || busy}
+                  disabled={confirmed || excluded || !pending || busy}
                   onClick={() =>
                     setEditing({
                       ...event.receipts.find((r) => r.id === editing.id)!,
@@ -1014,7 +1072,7 @@ export default function ReceiptManager({
                   영수증 삭제
                 </button>
                 <button
-                  disabled={busy || analyzing || !!links.length}
+                  disabled={busy || analyzing || excluded || !!links.length}
                   onClick={() =>
                     action(async () => {
                       await api(`/receipts/${editing.id}/exclude`, "POST");
