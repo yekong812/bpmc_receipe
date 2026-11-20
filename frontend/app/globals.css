@@ -1447,6 +1447,23 @@ fieldset:disabled textarea {
   border-radius: 7px;
   max-height: 65vh;
 }
+.receipt-table .receipt-select {
+  width: 48px;
+  min-width: 48px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+.receipt-select-hit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 48px;
+  min-height: 52px;
+  margin: 0;
+  cursor: pointer;
+}
 .annual-table th,
 .receipt-table thead th {
   position: sticky;

@@ -613,16 +613,26 @@ export default function ReceiptManager({
         <table>
           <thead>
             <tr>
-              <th scope="col">
-                <input
-                  type="checkbox"
-                  aria-label="현재 검색 결과 영수증 전체 선택"
-                  disabled={busy || analyzing || !visibleIds.length}
-                  checked={allVisibleChecked}
-                  onChange={(e) =>
-                    setCheckedIds(e.target.checked ? visibleIds : [])
-                  }
-                />
+              <th
+                scope="col"
+                className="receipt-select"
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  const input = e.currentTarget.querySelector("input");
+                  if (input && !input.disabled) input.click();
+                }}
+              >
+                <label className="receipt-select-hit">
+                  <input
+                    type="checkbox"
+                    aria-label="현재 검색 결과 영수증 전체 선택"
+                    disabled={busy || analyzing || !visibleIds.length}
+                    checked={allVisibleChecked}
+                    onChange={(e) =>
+                      setCheckedIds(e.target.checked ? visibleIds : [])
+                    }
+                  />
+                </label>
               </th>
               {receiptColumns.map(([column, label]) => {
                 const active = sort.column === column;
@@ -680,22 +690,31 @@ export default function ReceiptManager({
                     }
                   }}
                 >
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`영수증 ${number}번 선택`}
-                      disabled={busy || analyzing}
-                      checked={checkedIds.includes(r.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setCheckedIds((ids) =>
-                          checked
-                            ? [...ids, r.id]
-                            : ids.filter((id) => id !== r.id),
-                        );
-                      }}
-                    />
+                  <td
+                    className="receipt-select"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (e.target !== e.currentTarget) return;
+                      const input = e.currentTarget.querySelector("input");
+                      if (input && !input.disabled) input.click();
+                    }}
+                  >
+                    <label className="receipt-select-hit">
+                      <input
+                        type="checkbox"
+                        aria-label={`영수증 ${number}번 선택`}
+                        disabled={busy || analyzing}
+                        checked={checkedIds.includes(r.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setCheckedIds((ids) =>
+                            checked
+                              ? [...ids, r.id]
+                              : ids.filter((id) => id !== r.id),
+                          );
+                        }}
+                      />
+                    </label>
                   </td>
                   <td>{number}</td>
                   <td>
