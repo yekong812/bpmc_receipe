@@ -904,14 +904,10 @@ def generate_receipt_draft(db, receipt, result, source_type="ocr"):
             .order_by(Expense.id)
         )
     )
-    if len(duplicates) == 1 and linked:
-        return
-    for link, expense in linked:
+    for _link, expense in linked:
         if (
             expense.source_type not in ("ocr", "llm")
             or expense.edited_by != expense.source_type
-            or expense.amount_krw != r.final_amount_krw
-            or link.allocated_amount_krw != r.final_amount_krw
             or db.scalar(
                 select(func.count()).select_from(Link).where(Link.expense_id == expense.id)
             )
@@ -934,8 +930,6 @@ def generate_receipt_draft(db, receipt, result, source_type="ocr"):
                 source_type,
             )
             db.delete(duplicate)
-    if kept and kept[0].receipt_id == r.id:
-        return
     if r.id != receipt.id:
         extraction = db.scalar(
             select(Extraction)
@@ -973,13 +967,18 @@ def generate_receipt_draft(db, receipt, result, source_type="ocr"):
                 db.add(category)
             category.is_active = True
             db.flush()
-    amount = r.final_amount_krw
+    stamp = r.transaction_at or result.get("transaction_at")
+    amount = r.final_amount_krw if r.final_amount_krw is not None else result.get("final_amount_krw")
+    item_name = (r.description or result.get("description") or "")[:500]
+    vendor = r.merchant or result.get("merchant") or ""
+    reuse_link = bool(kept and kept[0].receipt_id == r.id)
     if kept:
         previous_link, x = kept
         before = encode(x)
-        db.delete(previous_link)
+        if not reuse_link:
+            db.delete(previous_link)
     else:
-        before = None
+        previous_link, before = None, None
         x = Expense(
             event_id=r.event_id,
             purchased=False,
@@ -987,17 +986,20 @@ def generate_receipt_draft(db, receipt, result, source_type="ocr"):
             review_status="검토 필요",
         )
     x.category_id = category.id
-    x.expense_date = r.transaction_at[:10] if r.transaction_at else None
-    x.item_name = r.description[:500]
+    x.expense_date = stamp[:10] if stamp else None
+    x.item_name = item_name
     x.amount_krw = amount
-    x.vendor = r.merchant
+    x.vendor = vendor
     x.note = note
     x.source_type = source_type
     x.edited_by = source_type
     x.edited_at = now()
     db.add(x)
     db.flush()
-    db.add(Link(expense_id=x.id, receipt_id=r.id, allocated_amount_krw=amount))
+    if reuse_link:
+        previous_link.allocated_amount_krw = amount
+    else:
+        db.add(Link(expense_id=x.id, receipt_id=r.id, allocated_amount_krw=amount))
     if book:
         sync_generated_entry(db, event, x, update_existing=kept is not None)
     audit(db, r.event_id, "auto_draft", before, encode(x), x.id, source_type)
@@ -1093,10 +1095,12 @@ def run_ocr(job_id, ids):
                                 error_message=llm.error,
                             )
                         )
-                    if not r.edited_at:
+                    if r.ocr_status == "대기" or not r.edited_at:
                         for k, v in result.items():
                             if hasattr(type(r), k):
                                 setattr(r, k, v)
+                    if r.ocr_status == "대기":
+                        r.ocr_status = "검토 필요"
                     generate_receipt_draft(
                         db, r, result, source_type="llm" if llm.candidate else "ocr"
                     )
@@ -1463,7 +1467,6 @@ def restore_excluded(db, r):
         or db.scalar(select(Extraction.id).where(Extraction.receipt_id == r.id).limit(1))
     )
     r.ocr_status = "검토 필요" if reviewed else "대기"
-    r.edited_at = now()
     audit(db, r.event_id, "receipt_restored", "제외", r.ocr_status)
     return r
 

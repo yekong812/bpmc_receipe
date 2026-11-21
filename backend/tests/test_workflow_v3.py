@@ -226,3 +226,23 @@ def test_restore_excluded_receipt_to_pending_or_review(client):
         r for r in c.get(f"/api/events/{e['id']}/receipts").json() if r["id"] == duplicate_id
     )
     assert row["ocr_status"] == "대기"
+
+
+def test_restored_waiting_receipt_moves_to_review_after_analysis(client, monkeypatch):
+    import backend.app.main as main
+
+    monkeypatch.setattr(
+        main, "recognize", lambda _: "상점\n2026-11-08 09:15\n최종 결제금액 5,000원"
+    )
+    c = client
+    e = create(c)
+    r = upload(c, e)
+    assert c.post(f"/api/receipts/{r['id']}/exclude").status_code == 200
+    restored = c.post(f"/api/receipts/{r['id']}/restore").json()
+    assert restored["ocr_status"] == "대기"
+    assert c.post(f"/api/events/{e['id']}/receipts/analyze").status_code == 202
+    data = latest(c, e)
+    receipt = data["receipts"][0]
+    assert receipt["ocr_status"] == "검토 필요" and receipt["final_amount_krw"] == 5000
+    draft = next(x for x in data["expenses"] if x["source_type"] == "ocr")
+    assert draft["amount_krw"] == 5000 and draft["vendor"] == "상점"
